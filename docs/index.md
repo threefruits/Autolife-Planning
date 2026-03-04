@@ -1,6 +1,6 @@
 # Autolife Planning
 
-A planning library for the **Autolife robot**. It integrates motion planning ([VAMP](https://github.com/KavrakiLab/vamp)), inverse kinematics (Cricket / TRAC-IK), and collision-aware planning (Foam) through a unified Python interface managed by [pixi](https://pixi.sh).
+A planning library for the **Autolife robot**. It provides inverse kinematics (TRAC-IK), motion planning ([VAMP](https://github.com/KavrakiLab/vamp)), and collision-aware planning through a unified Python interface.
 
 ## Features
 
@@ -8,26 +8,16 @@ A planning library for the **Autolife robot**. It integrates motion planning ([V
 - **Motion Planning** — VAMP-based planner with collision checking and path validation
 - **Collision Geometry** — Spherized URDF representations for efficient collision detection
 - **Rotation Utilities** — Conversions between quaternion, RPY, axis-angle, and rotation matrices
-- **Environment Interface** — Abstract base with PyBullet simulation support
 
-## Quick Start
+## Quick Install
 
 ```bash
-git clone --recursive https://github.com/H-tr/Autolife-Planning.git
-cd Autolife-Planning
-bash scripts/setup.sh
+# Set up the conda environment with system dependencies
+conda env create -f environment.yaml
+conda activate autolife
+
+# Install the package
+pip install autolife-planning
 ```
 
-This will install pixi (if needed), set up the environment, build the C++ dependencies, and download assets.
-
-## Project Structure
-
-```
-autolife_planning/   # Core Python package
-third_party/
-  cricket/           # Inverse kinematics library
-  foam/              # Collision-aware planning
-  vamp/              # Motion planning (installed as editable PyPI dep)
-scripts/             # Setup and utility scripts
-examples/            # Example scripts
-```
+See the [Getting Started](getting-started.md) guide for full details.
