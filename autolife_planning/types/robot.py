@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass
@@ -26,3 +26,7 @@ class ChainConfig:
     ee_link: str
     num_joints: int
     urdf_path: str
+
+    def with_urdf_path(self, urdf_path: str) -> "ChainConfig":
+        """Return a copy with a different URDF path."""
+        return replace(self, urdf_path=urdf_path)

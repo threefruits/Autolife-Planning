@@ -5,7 +5,7 @@ import numpy as np
 from autolife_planning.types.robot import CameraConfig, ChainConfig, RobotConfig
 
 _RESOURCES_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "resources",
     "robot",
     "autolife",

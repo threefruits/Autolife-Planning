@@ -229,6 +229,7 @@ def create_ik_solver(
     chain_name: str,
     config: IKConfig | None = None,
     side: str | None = None,
+    urdf_path: str | None = None,
 ) -> TracIKSolver:
     """Factory function to create a TRAC-IK solver for a named chain.
 
@@ -236,12 +237,14 @@ def create_ik_solver(
         chain_name: Name of the chain (e.g. "left_arm", "whole_body")
         config: IK configuration (uses defaults if None)
         side: Optional "left" or "right" suffix for compound names
+        urdf_path: Override the default URDF file path
     Output:
         TracIKSolver instance
 
     Examples:
         create_ik_solver("left_arm")
         create_ik_solver("whole_body", side="left")  # resolves to "whole_body_left"
+        create_ik_solver("left_arm", urdf_path="/path/to/autolife.urdf")
     """
     if side is not None:
         chain_name = f"{chain_name}_{side}"
@@ -250,4 +253,8 @@ def create_ik_solver(
         available = ", ".join(sorted(CHAIN_CONFIGS.keys()))
         raise ValueError(f"Unknown chain '{chain_name}'. Available chains: {available}")
 
-    return TracIKSolver(CHAIN_CONFIGS[chain_name], config)
+    chain_config = CHAIN_CONFIGS[chain_name]
+    if urdf_path is not None:
+        chain_config = chain_config.with_urdf_path(urdf_path)
+
+    return TracIKSolver(chain_config, config)

@@ -4,14 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autolife_planning"
-version = "0.1.0"
+version = "0.1.1"
 description = "Autolife planning module"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
     "scipy",
-    "pybind11>=2.10", "pre-commit>=4.5.1,<5",
+    "pybind11>=2.10",
+    "autolife-vamp>=0.6.1",
 ]
 
 [project.optional-dependencies]
@@ -21,13 +22,16 @@ pinocchio = ["pin"]
 [tool.setuptools.packages.find]
 include = ["autolife_planning*"]
 
+[tool.setuptools.package-data]
+autolife_planning = ["resources/**/*.urdf", "resources/**/*.srdf", "resources/**/*.STL"]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.pypi-dependencies]
 autolife_planning = { path = ".", editable = true }
-vamp-planner = { path = "./third_party/vamp", editable = true }
+autolife-vamp = { path = "./third_party/vamp", editable = true }
 foam = { path = "./third_party/foam", editable = true }
 
 [tool.pixi.environments]
@@ -42,6 +46,9 @@ foam-build = { cmd = "cmake --build third_party/foam/build", depends-on = ["foam
 build-robot = { cmd = "bash scripts/build_robot.sh", depends-on = ["foam-build"] }
 spherize-robot = { cmd = "bash scripts/spherize_robot.sh", depends-on = ["build-robot"] }
 generate-fk = { cmd = "bash scripts/generate_fk.sh", depends-on = ["spherize-robot"] }
+build-vamp = "python -m build third_party/vamp --no-isolation --skip-dependency-check --outdir dist/"
+build-pkg = "python -m build --no-isolation --skip-dependency-check --outdir dist/"
+build-all = { depends-on = ["build-vamp", "build-pkg"] }
 
 [tool.pixi.dependencies]
 cmake = ">=4.2.3,<5"
@@ -67,6 +74,9 @@ fire = ">=0.7.1,<0.8"
 xmltodict = ">=1.0.4,<2"
 pymeshlab = ">=2025.7.post1,<2026"
 pip = ">=26.0.1,<27"
+python-build = ">=1.2.2,<2"
+scikit-build-core = ">=0.4.3"
+nanobind = ">=2.0.0"
 
 [tool.pixi.feature.dev.pypi-dependencies]
 pybullet = "*"
