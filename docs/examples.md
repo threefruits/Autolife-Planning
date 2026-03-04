@@ -94,7 +94,13 @@ if result.success:
 
 ## Motion Planning with Obstacles
 
-Plan around a point cloud obstacle (e.g., a table) with PyBullet visualization and interactive configuration sampling:
+Plan around a point cloud obstacle (e.g., a table) with PyBullet visualization and interactive configuration sampling.
+
+Download the sample table point cloud:
+
+```bash
+wget "https://www.dropbox.com/scl/fi/joicyd270mdbufl1evh35/table.ply?rlkey=uv0tle4qqbp2203cjdzu76wzk&dl=1" -O table.ply
+```
 
 ```python
 import numpy as np
