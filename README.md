@@ -1,5 +1,14 @@
 # Autolife-Planning
 
+<div align="center">
+
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=for-the-badge&logo=materialformkdocs)](https://h-tr.github.io/Autolife-Planning/)
+[![Build Docs](https://img.shields.io/github/actions/workflow/status/H-tr/Autolife-Planning/docs.yml?branch=main&style=for-the-badge&label=docs%20build&logo=github)](https://github.com/H-tr/Autolife-Planning/actions/workflows/docs.yml)
+
+**[Documentation](https://h-tr.github.io/Autolife-Planning/)** | **[API Reference](https://h-tr.github.io/Autolife-Planning/api/kinematics/)** | **[Examples](https://h-tr.github.io/Autolife-Planning/examples/)**
+
+</div>
+
 A planning library for the Autolife robot. It integrates motion planning (VAMP), inverse kinematics (Cricket), and collision-aware planning (Foam) through a unified Python interface managed by [pixi](https://pixi.sh).
 
 ## Prerequisites
