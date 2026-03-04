@@ -20,38 +20,15 @@ The package depends on several C/C++ libraries that must be installed via conda-
 
 ## Installation
 
-### Using the environment file (recommended)
+### Step 1: Create conda environment
 
 ```bash
-conda env create -f environment.yaml
+conda create -n autolife -c conda-forge python=3.12 \
+  boost cxx-compiler cmake ninja eigen orocos-kdl nlopt pybind11 pip
 conda activate autolife
 ```
 
-This installs all system dependencies and `autolife-planning` in one step.
-
-??? note "environment.yaml"
-    ```yaml
-    name: autolife
-    channels:
-      - conda-forge
-    dependencies:
-      - python>=3.11,<3.13
-      - boost
-      - cxx-compiler
-      - cmake
-      - ninja
-      - eigen
-      - orocos-kdl
-      - nlopt
-      - pybind11
-      - pip
-      - pip:
-        - autolife-planning
-    ```
-
-### Manual installation
-
-If you already have a conda environment with the prerequisites:
+### Step 2: Install the package
 
 ```bash
 pip install autolife-planning
