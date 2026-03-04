@@ -11,12 +11,17 @@ A planning library for the **Autolife robot**. It provides inverse kinematics (T
 
 ## Quick Install
 
-```bash
-# Set up the conda environment with system dependencies
-conda env create -f environment.yaml
-conda activate autolife
+First, install the required C/C++ system dependencies via conda:
 
-# Install the package
+```bash
+conda create -n autolife -c conda-forge python=3.12 \
+  boost cxx-compiler cmake ninja eigen orocos-kdl nlopt pybind11 pip
+conda activate autolife
+```
+
+Then install the package:
+
+```bash
 pip install autolife-planning
 ```
 
