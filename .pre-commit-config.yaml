@@ -39,4 +39,5 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+        args: ['--maxkb=1024']
         exclude: '(robot/ik/ikfast/fetch/.*\.(cpp|h)$)|(resources/grasp_benchmark\.json$)'
