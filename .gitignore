@@ -216,6 +216,20 @@ __marimo__/
 .streamlit/secrets.toml
 .vscode
 assets/
+
+# Generated FK headers (built by cricket, consumed by vamp)
+*.hh
+
+# Generated build artifacts
+output.json
+
+# Generated subgroup URDFs (built by scripts/build_subgroups.sh)
+resources/robot/autolife/autolife_*_high*.urdf
+resources/robot/autolife/autolife_*_mid*.urdf
+resources/robot/autolife/autolife_*_low*.urdf
+resources/robot/autolife/autolife_body*.urdf
+resources/robot/autolife/autolife_*_spherized.urdf
+
 # pixi environments
 .pixi/*
 !.pixi/config.toml

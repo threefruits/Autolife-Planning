@@ -1,5 +1,5 @@
-import os
 import time
+from importlib.resources import files
 from typing import Any
 
 import numpy as np
@@ -13,14 +13,12 @@ from autolife_planning.types import PlannerConfig
 
 POINT_RADIUS = 0.01
 
-script_path = os.path.abspath(__file__)
-project_root = os.path.dirname(os.path.dirname(script_path))
-
 
 def main(planner_name="rrtc"):
     # 1. Load and Process Pointcloud
-    assets_dir = os.path.join(project_root, "assets", "envs", "rls_env", "pcd")
-    table_pcd_path = os.path.join(assets_dir, "table.ply")
+    table_pcd_path = str(
+        files("autolife_planning").joinpath("resources", "envs", "pcd", "table.ply")
+    )
 
     table_pcd: Any = trimesh.load(table_pcd_path)
     points = np.array(table_pcd.vertices)

@@ -1,4 +1,6 @@
 import os
+import re
+import tempfile
 from typing import Any
 
 import numpy as np
@@ -9,12 +11,57 @@ from autolife_planning.envs.base_env import BaseEnv
 from autolife_planning.types import RobotConfig
 
 
+def _resolve_package_paths(urdf_path: str) -> str:
+    """Resolve ``package://`` URIs in a URDF to absolute paths.
+
+    PyBullet resolves ``package://`` relative to the URDF file's directory,
+    which breaks for ROS-style ``package://pkg_name/...`` references.  This
+    helper rewrites them to absolute paths in a temporary file.
+    """
+    urdf_dir = os.path.dirname(os.path.abspath(urdf_path))
+
+    with open(urdf_path, "r") as f:
+        content = f.read()
+
+    def _replace(m: re.Match) -> str:
+        pkg_name = m.group(1)
+        rest = m.group(2)
+        # Walk up from the URDF directory to find the package directory
+        search = urdf_dir
+        for _ in range(10):
+            candidate = os.path.join(search, pkg_name)
+            if os.path.isdir(candidate):
+                return os.path.join(candidate, rest)
+            parent = os.path.dirname(search)
+            if parent == search:
+                break
+            search = parent
+        return m.group(0)  # leave unchanged if not found
+
+    resolved = re.sub(r"package://([^/]+)/([\w/.\-]+)", _replace, content)
+
+    if resolved == content:
+        return urdf_path  # nothing changed
+
+    tmp = tempfile.NamedTemporaryFile(
+        suffix=".urdf", prefix="viz_", delete=False, mode="w"
+    )
+    tmp.write(resolved)
+    tmp.close()
+    return tmp.name
+
+
 class PyBulletEnv(BaseEnv):
-    def __init__(self, config: RobotConfig, visualize: bool = True):
+    def __init__(
+        self,
+        config: RobotConfig,
+        visualize: bool = True,
+        viz_urdf_path: str | None = None,
+    ):
         self.config = config
-        self.sim = vpb.PyBulletSimulator(
-            config.urdf_path, config.joint_names, visualize=visualize
-        )
+        urdf = viz_urdf_path if viz_urdf_path else config.urdf_path
+        urdf = _resolve_package_paths(urdf)
+        self.sim = vpb.PyBulletSimulator(urdf, config.joint_names, visualize=visualize)
         self.joint_names = config.joint_names
 
         # Find camera link index

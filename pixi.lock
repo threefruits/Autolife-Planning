@@ -610,7 +610,7 @@ packages:
 - pypi: ./
   name: autolife-planning
   version: 0.1.1
-  sha256: c801ed2ab04f502c08280381c68c9a861660688845417aa359050f45aa57f16c
+  sha256: 2cb00e7aebe5785f855b985e107cdf296fe4bf10ae9023b375bf8b9949e5b226
   requires_dist:
   - numpy
   - scipy
@@ -623,7 +623,7 @@ packages:
 - pypi: ./third_party/vamp
   name: autolife-vamp
   version: 0.6.1
-  sha256: 418abb74d165972f3098f161787f9aa84713d0ff3121582cd129408d9e507f22
+  sha256: 3ec69e0c58b5fe93290e0234baaa099c507e654a221cab1b09c242c01a0ee932
   requires_dist:
   - numpy
   - fire ; extra == 'examples'

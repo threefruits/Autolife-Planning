@@ -23,7 +23,12 @@ pinocchio = ["pin"]
 include = ["autolife_planning*"]
 
 [tool.setuptools.package-data]
-autolife_planning = ["resources/**/*.urdf", "resources/**/*.srdf", "resources/**/*.STL"]
+autolife_planning = [
+    "resources/**/*.urdf",
+    "resources/**/*.srdf",
+    "resources/**/*.STL",
+    "resources/**/*.ply",
+]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
