@@ -29,6 +29,7 @@ SUBGROUPS=(
     autolife_torso_right_mid
     autolife_torso_right_low
     autolife_body
+    autolife_body_coupled
 )
 
 # 1. Distribute robot descriptions to cricket + vamp resources

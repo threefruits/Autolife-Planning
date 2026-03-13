@@ -83,6 +83,7 @@ class MotionPlanner:
         # Subgroup joint mapping
         self._joint_names: list[str] = list(self._vamp_module.joint_names())
         self._subgroup_indices: np.ndarray | None = self._compute_subgroup_indices()
+        self._coupled_joints: list[dict] = self._load_coupling()
 
         if pointcloud is not None:
             r_min, r_max = self._vamp_module.min_max_radii()
@@ -134,6 +135,14 @@ class MotionPlanner:
         except ValueError:
             return None
 
+    def _load_coupling(self) -> list[dict]:
+        from autolife_planning.config.robot_config import PLANNING_SUBGROUPS
+
+        sg = PLANNING_SUBGROUPS.get(self._robot_name)
+        if sg is None:
+            return []
+        return sg.get("coupled_joints", [])
+
     def extract_config(self, full_config: np.ndarray) -> np.ndarray:
         """Extract this planner's joints from a full 24-DOF configuration.
 
@@ -152,17 +161,20 @@ class MotionPlanner:
         """Embed a subgroup config into a full 24-DOF configuration.
 
         Frozen joints are filled from *base_config* (defaults to
-        ``HOME_JOINTS``).
+        ``HOME_JOINTS``).  Coupled slave joints are computed from
+        their master joint values.
         """
         config = np.asarray(config, dtype=np.float64)
-        if self._subgroup_indices is None:
+        if self._subgroup_indices is None and not self._coupled_joints:
             return config.copy()
         from autolife_planning.config.robot_config import HOME_JOINTS
 
         if base_config is None:
             base_config = HOME_JOINTS
         full = np.array(base_config, dtype=np.float64)
-        full[self._subgroup_indices] = config
+        if self._subgroup_indices is not None:
+            full[self._subgroup_indices] = config
+        self._apply_coupling(full)
         return full
 
     def embed_path(
@@ -173,10 +185,11 @@ class MotionPlanner:
         """Convert a subgroup path ``(N, sub_dof)`` to ``(N, 24)``.
 
         Frozen joints are filled from *base_config* (defaults to
-        ``HOME_JOINTS``).
+        ``HOME_JOINTS``).  Coupled slave joints are computed from
+        their master joint values.
         """
         path = np.asarray(path, dtype=np.float64)
-        if self._subgroup_indices is None:
+        if self._subgroup_indices is None and not self._coupled_joints:
             return path.copy()
         from autolife_planning.config.robot_config import HOME_JOINTS
 
@@ -184,8 +197,25 @@ class MotionPlanner:
             base_config = HOME_JOINTS
         n = path.shape[0]
         full_path = np.tile(np.array(base_config, dtype=np.float64), (n, 1))
-        full_path[:, self._subgroup_indices] = path
+        if self._subgroup_indices is not None:
+            full_path[:, self._subgroup_indices] = path
+        for i in range(n):
+            self._apply_coupling(full_path[i])
         return full_path
+
+    def _apply_coupling(self, full_config: np.ndarray) -> None:
+        """Set coupled slave joints from their master values, in-place."""
+        if not self._coupled_joints:
+            return
+        from autolife_planning.config.robot_config import autolife_robot_config
+
+        names = autolife_robot_config.joint_names
+        for c in self._coupled_joints:
+            master_idx = names.index(c["master"])
+            slave_idx = names.index(c["slave"])
+            full_config[slave_idx] = c["multiplier"] * full_config[master_idx] + c.get(
+                "offset", 0.0
+            )
 
     def plan(
         self,

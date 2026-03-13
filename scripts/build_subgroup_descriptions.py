@@ -176,6 +176,20 @@ SUBGROUPS = {
         "frozen": {},
         "end_effector": "Link_Right_Gripper_Right_Finger",
     },
+    # --- Coupled-leg variants (knee = 2 * ankle) ---
+    # Legs move during planning but are driven by a single DOF.
+    "autolife_body_coupled": {
+        "frozen": {},
+        "end_effector": "Link_Right_Gripper_Right_Finger",
+        "coupled_joints": [
+            {
+                "master": "Joint_Ankle",
+                "slave": "Joint_Knee",
+                "multiplier": 2.0,
+                "offset": 0.0,
+            }
+        ],
+    },
 }
 
 # ── XML helpers (same as build_robot_description.py) ─────────────────────────
@@ -286,8 +300,13 @@ def _snake_to_pascal(name: str) -> str:
     return "_".join(w.capitalize() for w in name.split("_"))
 
 
-def generate_cricket_config(name: str, end_effector: str, resolution: int = 64) -> dict:
-    return {
+def generate_cricket_config(
+    name: str,
+    end_effector: str,
+    resolution: int = 64,
+    coupled_joints: list[dict] | None = None,
+) -> dict:
+    cfg = {
         "name": _snake_to_pascal(name),
         "urdf": f"autolife/{name}_spherized.urdf",
         "srdf": "autolife/autolife.srdf",
@@ -297,6 +316,9 @@ def generate_cricket_config(name: str, end_effector: str, resolution: int = 64) 
         "subtemplates": [{"name": "ccfk", "template": "templates/ccfk_template.hh"}],
         "output": f"{name}_fk.hh",
     }
+    if coupled_joints:
+        cfg["coupled_joints"] = coupled_joints
+    return cfg
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -343,7 +365,9 @@ def main() -> None:
         tree = generate_subgroup_urdf(base_tree, config["frozen"])
         _write_xml(tree, args.output_dir / f"{name}.urdf")
 
-        cricket = generate_cricket_config(name, config["end_effector"])
+        cricket = generate_cricket_config(
+            name, config["end_effector"], coupled_joints=config.get("coupled_joints")
+        )
         cricket_path = args.cricket_dir / f"{name}.json"
         with open(cricket_path, "w") as f:
             json.dump(cricket, f, indent=4)
