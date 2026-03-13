@@ -162,6 +162,28 @@ PLANNING_SUBGROUPS = {
             *_RIGHT_ARM_JOINTS,
         ],
     },
+    # Coupled-leg variant (20 DOF: knee = 2 * ankle)
+    "autolife_body_coupled": {
+        "dof": 20,
+        "joints": [
+            "Joint_Ankle",
+            # Joint_Knee omitted — driven by coupling, not an independent DOF
+            *_WAIST_JOINTS,
+            *_LEFT_ARM_JOINTS,
+            "Joint_Neck_Roll",
+            "Joint_Neck_Pitch",
+            "Joint_Neck_Yaw",
+            *_RIGHT_ARM_JOINTS,
+        ],
+        "coupled_joints": [
+            {
+                "master": "Joint_Ankle",
+                "slave": "Joint_Knee",
+                "multiplier": 2.0,
+                "offset": 0.0,
+            },
+        ],
+    },
 }
 
 HOME_JOINTS = np.array(
