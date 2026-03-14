@@ -6,7 +6,7 @@
 
 ### Factory Function
 
-::: autolife_planning.kinematics.trac_ik_solver.create_ik_solver
+::: autolife_planning.kinematics.ik_solver_base.create_ik_solver
 
 ## Forward Kinematics (Pinocchio)
 
