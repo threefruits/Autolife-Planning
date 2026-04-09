@@ -1,12 +1,13 @@
-"""VAMP-based motion planner.
+"""OMPL + VAMP motion planner.
 
-Wraps the VAMP C++ library internally. No vamp types leak to the caller.
-Mirrors the TracIKSolver pattern: configure -> create -> planner.plan() -> result.
+Uses OMPL for planning algorithms and VAMP for SIMD-accelerated
+collision checking.  The entire planning pipeline runs in C++ via
+the ``_ompl_vamp`` extension — Python only crosses the boundary
+once per ``plan()`` call.
 
-Supports subgroup planning: each subgroup (e.g. ``autolife_left_high``)
-operates on a subset of joints while the rest stay frozen.  Use
-:meth:`extract_config` / :meth:`embed_config` / :meth:`embed_path` to
-convert between the subgroup DOF space and the full 24-DOF body config.
+Supports subgroup planning: each subgroup operates on a reduced
+state space while frozen joints are expanded to the full 24-DOF
+config before collision checks.
 """
 
 from __future__ import annotations
@@ -30,11 +31,7 @@ class MotionPlannerBase(Protocol):
     def num_dof(self) -> int:
         ...
 
-    def plan(
-        self,
-        start: np.ndarray,
-        goal: np.ndarray,
-    ) -> PlanningResult:
+    def plan(self, start: np.ndarray, goal: np.ndarray) -> PlanningResult:
         ...
 
     def validate(self, configuration: np.ndarray) -> bool:
@@ -42,15 +39,15 @@ class MotionPlannerBase(Protocol):
 
 
 class MotionPlanner:
-    """Motion planner wrapping the VAMP C++ library.
+    """Motion planner using OMPL + VAMP C++ backend.
 
-    All vamp internals are private. The public API accepts and returns
+    All internals are private.  The public API accepts and returns
     only numpy arrays.
 
     For subgroup planners the helper methods :meth:`extract_config`,
     :meth:`embed_config`, and :meth:`embed_path` convert between the
     reduced DOF space used by the planner and the full 24-DOF body
-    configuration used for visualization.
+    configuration.
     """
 
     def __init__(
@@ -59,35 +56,42 @@ class MotionPlanner:
         config: PlannerConfig | None = None,
         pointcloud: np.ndarray | None = None,
     ) -> None:
+        from autolife_planning._ompl_vamp import OmplVampPlanner
+        from autolife_planning.config.robot_config import (
+            PLANNING_SUBGROUPS,
+            autolife_robot_config,
+            subgroup_base_config,
+        )
+
         if config is None:
             config = PlannerConfig()
-
-        import vamp
 
         self._config = config
         self._robot_name = robot_name
 
-        (
-            self._vamp_module,
-            self._planner_func,
-            self._plan_settings,
-            self._simp_settings,
-        ) = vamp.configure_robot_and_planner_with_kwargs(
-            robot_name, config.planner_name
-        )
+        full_names = autolife_robot_config.joint_names
+        sg = PLANNING_SUBGROUPS.get(robot_name)
 
-        self._env = vamp.Environment()
-        self._sampler = self._vamp_module.halton()
-        self._ndof: int = self._vamp_module.dimension()
+        if sg is None:
+            # Full-body planner
+            self._planner = OmplVampPlanner()
+            self._joint_names = list(full_names)
+            self._subgroup_indices = None
+        else:
+            # Subgroup planner
+            sg_joint_names = sg["joints"]
+            active_indices = [full_names.index(j) for j in sg_joint_names]
+            frozen = subgroup_base_config(robot_name).tolist()
+            self._planner = OmplVampPlanner(active_indices, frozen)
+            self._joint_names = list(sg_joint_names)
+            self._subgroup_indices = np.array(active_indices)
 
-        # Subgroup joint mapping
-        self._joint_names: list[str] = list(self._vamp_module.joint_names())
-        self._subgroup_indices: np.ndarray | None = self._compute_subgroup_indices()
-        self._coupled_joints: list[dict] = self._load_coupling()
+        self._ndof = self._planner.dimension()
+        self._coupled_joints = self._load_coupling()
 
         if pointcloud is not None:
-            r_min, r_max = self._vamp_module.min_max_radii()
-            self._env.add_pointcloud(
+            r_min, r_max = self._planner.min_max_radii()
+            self._planner.add_pointcloud(
                 np.asarray(pointcloud, dtype=np.float32).tolist(),
                 r_min,
                 r_max,
@@ -116,24 +120,10 @@ class MotionPlanner:
 
     @property
     def subgroup_indices(self) -> np.ndarray | None:
-        """Indices of this planner's joints in the full 24-DOF config.
-
-        ``None`` for the full-body ``autolife`` planner.
-        """
+        """Indices of this planner's joints in the full 24-DOF config."""
         return self._subgroup_indices
 
     # ── Subgroup helpers ──────────────────────────────────────────────
-
-    def _compute_subgroup_indices(self) -> np.ndarray | None:
-        from autolife_planning.config.robot_config import autolife_robot_config
-
-        full_names = autolife_robot_config.joint_names
-        if len(self._joint_names) == len(full_names):
-            return None
-        try:
-            return np.array([full_names.index(j) for j in self._joint_names])
-        except ValueError:
-            return None
 
     def _load_coupling(self) -> list[dict]:
         from autolife_planning.config.robot_config import PLANNING_SUBGROUPS
@@ -144,10 +134,7 @@ class MotionPlanner:
         return sg.get("coupled_joints", [])
 
     def extract_config(self, full_config: np.ndarray) -> np.ndarray:
-        """Extract this planner's joints from a full 24-DOF configuration.
-
-        For the full-body planner this is a copy of the input.
-        """
+        """Extract this planner's joints from a full 24-DOF configuration."""
         full_config = np.asarray(full_config, dtype=np.float64)
         if self._subgroup_indices is None:
             return full_config.copy()
@@ -158,12 +145,7 @@ class MotionPlanner:
         config: np.ndarray,
         base_config: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Embed a subgroup config into a full 24-DOF configuration.
-
-        Frozen joints are filled from *base_config* (defaults to
-        ``HOME_JOINTS``).  Coupled slave joints are computed from
-        their master joint values.
-        """
+        """Embed a subgroup config into a full 24-DOF configuration."""
         config = np.asarray(config, dtype=np.float64)
         if self._subgroup_indices is None and not self._coupled_joints:
             return config.copy()
@@ -182,12 +164,7 @@ class MotionPlanner:
         path: np.ndarray,
         base_config: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Convert a subgroup path ``(N, sub_dof)`` to ``(N, 24)``.
-
-        Frozen joints are filled from *base_config* (defaults to
-        ``HOME_JOINTS``).  Coupled slave joints are computed from
-        their master joint values.
-        """
+        """Convert a subgroup path ``(N, sub_dof)`` to ``(N, 24)``."""
         path = np.asarray(path, dtype=np.float64)
         if self._subgroup_indices is None and not self._coupled_joints:
             return path.copy()
@@ -217,19 +194,14 @@ class MotionPlanner:
                 "offset", 0.0
             )
 
+    # ── Planning ──────────────────────────────────────────────────────
+
     def plan(
         self,
         start: np.ndarray,
         goal: np.ndarray,
     ) -> PlanningResult:
-        """Plan a collision-free path from start to goal.
-
-        Input:
-            start: Joint configuration array of length num_dof
-            goal: Joint configuration array of length num_dof
-        Output:
-            PlanningResult with status, path as (N, ndof) numpy array
-        """
+        """Plan a collision-free path from start to goal."""
         start = np.asarray(start, dtype=np.float64)
         goal = np.asarray(goal, dtype=np.float64)
 
@@ -238,8 +210,7 @@ class MotionPlanner:
         if len(goal) != self._ndof:
             raise ValueError(f"goal has {len(goal)} DOF, expected {self._ndof}")
 
-        # Validate start and goal
-        if not self._vamp_module.validate(start, self._env):
+        if not self._planner.validate(start.tolist()):
             return PlanningResult(
                 status=PlanningStatus.INVALID_START,
                 path=None,
@@ -247,7 +218,7 @@ class MotionPlanner:
                 iterations=0,
                 path_cost=float("inf"),
             )
-        if not self._vamp_module.validate(goal, self._env):
+        if not self._planner.validate(goal.tolist()):
             return PlanningResult(
                 status=PlanningStatus.INVALID_GOAL,
                 path=None,
@@ -256,69 +227,53 @@ class MotionPlanner:
                 path_cost=float("inf"),
             )
 
-        result = self._planner_func(
-            start, goal, self._env, self._plan_settings, self._sampler
+        result = self._planner.plan(
+            start.tolist(),
+            goal.tolist(),
+            self._config.planner_name,
+            self._config.time_limit,
+            self._config.simplify,
         )
 
         if not result.solved:
             return PlanningResult(
                 status=PlanningStatus.FAILED,
                 path=None,
-                planning_time_ns=result.nanoseconds,
-                iterations=result.iterations,
+                planning_time_ns=result.planning_time_ns,
+                iterations=0,
                 path_cost=float("inf"),
             )
 
-        path = result.path
-
-        if self._config.simplify:
-            simplified = self._vamp_module.simplify(
-                path, self._env, self._simp_settings, self._sampler
-            )
-            path = simplified.path
-
-        if self._config.interpolate:
-            path.interpolate_to_resolution(self._vamp_module.resolution())
-
-        path_cost = float(path.cost())
-        path_np = np.array(path.numpy())
+        path_np = np.array(result.path, dtype=np.float64)
 
         return PlanningResult(
             status=PlanningStatus.SUCCESS,
             path=path_np,
-            planning_time_ns=result.nanoseconds,
-            iterations=result.iterations,
-            path_cost=path_cost,
+            planning_time_ns=result.planning_time_ns,
+            iterations=0,
+            path_cost=result.path_cost,
         )
 
     def validate(self, configuration: np.ndarray) -> bool:
-        """Check if a configuration is collision-free.
-
-        Input:
-            configuration: Joint configuration array of length num_dof
-        Output:
-            True if collision-free
-        """
+        """Check if a configuration is collision-free."""
         configuration = np.asarray(configuration, dtype=np.float64)
-        return self._vamp_module.validate(configuration, self._env)
+        return self._planner.validate(configuration.tolist())
 
     def sample_valid(self) -> np.ndarray:
         """Sample a random collision-free configuration."""
+        lo = np.array(self._planner.lower_bounds())
+        hi = np.array(self._planner.upper_bounds())
         while True:
-            config = self._sampler.next()
-            if self._vamp_module.validate(config, self._env):
-                return np.asarray(config, dtype=np.float64)
+            config = np.random.uniform(lo, hi)
+            if self._planner.validate(config.tolist()):
+                return config
 
 
 def available_robots() -> list[str]:
-    """Return all available VAMP robot names.
+    """Return all available robot names for planning."""
+    from autolife_planning.config.robot_config import PLANNING_SUBGROUPS
 
-    Includes the full-body ``autolife`` and all planning subgroups
-    (e.g. ``autolife_left_high``, ``autolife_dual_mid``, …).
-    """
-    import vamp
-
-    return [r for r in vamp.robots if r.startswith("autolife")]
+    return ["autolife"] + sorted(PLANNING_SUBGROUPS.keys())
 
 
 def create_planner(
@@ -329,36 +284,12 @@ def create_planner(
     """Create a motion planner for any robot or subgroup.
 
     Args:
-        robot_name: VAMP robot name.  Use :func:`available_robots` to
-            list all names.  Common choices::
-
-                "autolife"               # full body, 24 DOF
-                "autolife_left_high"     # left arm, high stance, 7 DOF
-                "autolife_dual_mid"      # both arms, mid stance, 14 DOF
-                "autolife_torso_left_low"# waist+left arm, low stance, 9 DOF
-                "autolife_body"          # body w/o base, 21 DOF
-
+        robot_name: Robot or subgroup name. Use :func:`available_robots`
+            to list all names.
         config: Planner configuration (uses defaults if None).
         pointcloud: ``(N, 3)`` obstacle point cloud (optional).
 
     Returns:
-        A :class:`MotionPlanner` instance.  For subgroup planners use
-        :meth:`~MotionPlanner.extract_config` /
-        :meth:`~MotionPlanner.embed_config` /
-        :meth:`~MotionPlanner.embed_path` to convert between the
-        reduced DOF space and full 24-DOF visualization configs.
-
-    Examples::
-
-        # Full body
-        planner = create_planner("autolife")
-        result = planner.plan(start_24dof, goal_24dof)
-
-        # Subgroup (7-DOF left arm at high stance)
-        planner = create_planner("autolife_left_high")
-        start = planner.extract_config(HOME_JOINTS)   # → 7-DOF
-        goal = planner.sample_valid()                  # → 7-DOF
-        result = planner.plan(start, goal)             # path (N, 7)
-        full_path = planner.embed_path(result.path)    # → (N, 24)
+        A :class:`MotionPlanner` instance.
     """
     return MotionPlanner(robot_name, config, pointcloud)

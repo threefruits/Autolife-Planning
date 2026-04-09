@@ -322,7 +322,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/94/98/d2a6aeb1c6570a1fc1be29ee03db795f643ab03c6df7635522f23796b39d/vhacdx-0.0.10-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: ./
       - pypi: ./third_party/foam
-      - pypi: ./third_party/vamp
   dev:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -655,7 +654,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/29/d1/3f62e4f9577b28c352c11623a03fb916096d5c131303d4861b4914481b6b/virtualenv-21.0.0-py3-none-any.whl
       - pypi: ./
       - pypi: ./third_party/foam
-      - pypi: ./third_party/vamp
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -745,29 +743,15 @@ packages:
   timestamp: 1756738968573
 - pypi: ./
   name: autolife-planning
-  version: 0.1.4
-  sha256: 98ad14687be78b7da836d7e297058df06e1342fd0667179ed9778492a6573441
+  version: 0.2.0
+  sha256: 25960d233c16f8aab7671cfe5e8a7d999c1106acc00f67eb2668b1c12d59c042
   requires_dist:
   - numpy
   - scipy
-  - autolife-vamp>=0.6.4
   - pink
+  - pre-commit ; extra == 'dev'
+  - pybullet ; extra == 'dev'
   requires_python: '>=3.10'
-- pypi: ./third_party/vamp
-  name: autolife-vamp
-  version: 0.6.4
-  sha256: 49ad680ba46a931c84e85159f98e4d4778f241735ed2e91b02efebe43435b87f
-  requires_dist:
-  - numpy
-  - fire ; extra == 'examples'
-  - pybullet ; extra == 'examples'
-  - pyyaml ; extra == 'examples'
-  - tqdm ; extra == 'examples'
-  - pandas ; extra == 'examples'
-  - tabulate ; extra == 'examples'
-  - xmltodict ; extra == 'examples'
-  - pillow ; extra == 'heightmaps'
-  requires_python: '>=3.8'
 - conda: https://conda.anaconda.org/conda-forge/noarch/backports-1.0-pyhd8ed1ab_5.conda
   sha256: e1c3dc8b5aa6e12145423fed262b4754d70fec601339896b9ccf483178f690a6
   md5: 767d508c1a67e02ae8f50e44cacfadb2
