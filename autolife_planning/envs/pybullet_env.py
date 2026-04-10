@@ -5,10 +5,10 @@ from typing import Any
 
 import numpy as np
 import pybullet as pb
-from vamp import pybullet_interface as vpb
 
 from autolife_planning.envs.base_env import BaseEnv
 from autolife_planning.types import RobotConfig
+from autolife_planning.utils import pybullet_interface as vpb
 
 
 def _resolve_package_paths(urdf_path: str) -> str:

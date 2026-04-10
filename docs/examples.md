@@ -209,7 +209,7 @@ if result.success:
 
 ## Subgroup Planning
 
-Plan for individual subgroups of the robot — single arm, dual arm, torso+arm, or whole body. Each subgroup operates on a subset of joints while keeping the rest frozen at a base configuration.
+Plan for an individual subgroup — single arm, dual arm, torso+arm, or whole body. Each subgroup describes only the *active* joints; the inactive joints are pinned to whatever 24-DOF configuration you pass in as `base_config` and the C++ collision checker injects them on every state and motion validity query.
 
 <video controls width="100%">
   <source src="../assets/subgroup_planning.mp4" type="video/mp4">
@@ -217,45 +217,49 @@ Plan for individual subgroups of the robot — single arm, dual arm, torso+arm, 
 
 ### Available subgroups
 
-| Category | Subgroups | DOF |
+| Category | Subgroup | DOF |
 |---|---|---|
-| Single arm | `autolife_left_high`, `autolife_left_mid`, `autolife_left_low`, `autolife_right_high`, `autolife_right_mid`, `autolife_right_low` | 7 |
-| Dual arm | `autolife_dual_high`, `autolife_dual_mid`, `autolife_dual_low` | 14 |
-| Torso + arm | `autolife_torso_left_high`, `autolife_torso_left_mid`, `autolife_torso_left_low`, `autolife_torso_right_high`, `autolife_torso_right_mid`, `autolife_torso_right_low` | 9 |
-| Whole body | `autolife_body` | 21 |
+| Single arm | `autolife_left_arm`, `autolife_right_arm` | 7 |
+| Dual arm | `autolife_dual_arm` | 14 |
+| Torso + arm | `autolife_torso_left_arm`, `autolife_torso_right_arm` | 9 |
+| Whole body (no base) | `autolife_body` | 21 |
 
-The `high`/`mid`/`low` suffix selects the waist preset (frozen torso angle) for the subgroup.
+The full-body planner `"autolife"` (24 DOF including the virtual base) is also available.
 
 ### Basic usage
 
 ```python
-from autolife_planning.config.robot_config import subgroup_base_config
+from autolife_planning.config.robot_config import HOME_JOINTS
 from autolife_planning.planning import create_planner
 from autolife_planning.types import PlannerConfig
 
-# Create a planner for a single left arm (7 DOF)
+# Pin the rest of the body to whatever pose you like — HOME_JOINTS,
+# the live state of the robot, or any custom 24-DOF array.
+base_cfg = HOME_JOINTS.copy()
+
+# Create a planner for a single left arm (7 DOF).  The C++ checker
+# will inject base_cfg for every joint outside the subgroup on every
+# collision query, and embed_path will use the same base by default.
 planner = create_planner(
-    "autolife_left_high",
+    "autolife_left_arm",
     config=PlannerConfig(planner_name="rrtc"),
+    base_config=base_cfg,
 )
 
-# Get the base configuration (frozen joints for this subgroup)
-base_cfg = subgroup_base_config("autolife_left_high")
-
-# Extract the subgroup's start from the full-body base config
+# Extract the subgroup's start from the full-body base
 start = planner.extract_config(base_cfg)
 
 # Sample a collision-free goal in the subgroup's joint space
 goal = planner.sample_valid()
 
-# Plan
 result = planner.plan(start, goal)
 if result.success:
     print(f"Path: {result.path.shape[0]} waypoints, "
           f"{result.planning_time_ns / 1e6:.1f}ms")
 
-    # Map the subgroup path back to full-body configurations
-    full_path = planner.embed_path(result.path, base_config=base_cfg)
+    # Map the subgroup path back to full-body configurations.
+    # Defaults to the planner's stored base_config.
+    full_path = planner.embed_path(result.path)
 ```
 
 ### With PyBullet visualization
@@ -267,7 +271,7 @@ pixi run -e dev python examples/subgroup_planning_example.py
 pixi run -e dev python examples/subgroup_planning_example.py --planner_name prm
 ```
 
-The example iterates through all 16 subgroups, plans a path from home to a random goal, and animates the result. Press `n` to advance between subgroups and `q` to quit.
+The example iterates through all kinematic subgroups, plans a path from home to a random goal, and animates the result. Press `n` to advance between subgroups and `q` to quit.
 
 ---
 

@@ -55,12 +55,13 @@ class MotionPlanner:
         robot_name: str,
         config: PlannerConfig | None = None,
         pointcloud: np.ndarray | None = None,
+        base_config: np.ndarray | None = None,
     ) -> None:
         from autolife_planning._ompl_vamp import OmplVampPlanner
         from autolife_planning.config.robot_config import (
+            HOME_JOINTS,
             PLANNING_SUBGROUPS,
             autolife_robot_config,
-            subgroup_base_config,
         )
 
         if config is None:
@@ -68,6 +69,19 @@ class MotionPlanner:
 
         self._config = config
         self._robot_name = robot_name
+
+        # Frozen 24-DOF joint values for any joint not controlled by
+        # this planner.  Defaults to HOME_JOINTS, but the caller can
+        # pass any 24-DOF array — e.g. the live config from the env —
+        # so the inactive joints are pinned wherever they currently are.
+        if base_config is None:
+            base_config = HOME_JOINTS
+        self._base_config = np.asarray(base_config, dtype=np.float64).copy()
+        if self._base_config.shape != HOME_JOINTS.shape:
+            raise ValueError(
+                f"base_config must have shape {HOME_JOINTS.shape}, "
+                f"got {self._base_config.shape}"
+            )
 
         full_names = autolife_robot_config.joint_names
         sg = PLANNING_SUBGROUPS.get(robot_name)
@@ -78,16 +92,16 @@ class MotionPlanner:
             self._joint_names = list(full_names)
             self._subgroup_indices = None
         else:
-            # Subgroup planner
+            # Subgroup planner — frozen joints come from the supplied
+            # base_config; the C++ checker injects them around the
+            # active subset before every collision query.
             sg_joint_names = sg["joints"]
             active_indices = [full_names.index(j) for j in sg_joint_names]
-            frozen = subgroup_base_config(robot_name).tolist()
-            self._planner = OmplVampPlanner(active_indices, frozen)
+            self._planner = OmplVampPlanner(active_indices, self._base_config.tolist())
             self._joint_names = list(sg_joint_names)
             self._subgroup_indices = np.array(active_indices)
 
         self._ndof = self._planner.dimension()
-        self._coupled_joints = self._load_coupling()
 
         if pointcloud is not None:
             r_min, r_max = self._planner.min_max_radii()
@@ -123,15 +137,12 @@ class MotionPlanner:
         """Indices of this planner's joints in the full 24-DOF config."""
         return self._subgroup_indices
 
+    @property
+    def base_config(self) -> np.ndarray:
+        """The 24-DOF stance frozen for joints outside this subgroup."""
+        return self._base_config.copy()
+
     # ── Subgroup helpers ──────────────────────────────────────────────
-
-    def _load_coupling(self) -> list[dict]:
-        from autolife_planning.config.robot_config import PLANNING_SUBGROUPS
-
-        sg = PLANNING_SUBGROUPS.get(self._robot_name)
-        if sg is None:
-            return []
-        return sg.get("coupled_joints", [])
 
     def extract_config(self, full_config: np.ndarray) -> np.ndarray:
         """Extract this planner's joints from a full 24-DOF configuration."""
@@ -145,18 +156,20 @@ class MotionPlanner:
         config: np.ndarray,
         base_config: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Embed a subgroup config into a full 24-DOF configuration."""
+        """Embed a subgroup config into a full 24-DOF configuration.
+
+        ``base_config`` defaults to the planner's stored base — the same
+        24-DOF values the C++ collision checker injects for inactive
+        joints — so the embedded config matches what was validated.
+        """
         config = np.asarray(config, dtype=np.float64)
-        if self._subgroup_indices is None and not self._coupled_joints:
+        if self._subgroup_indices is None:
             return config.copy()
-        from autolife_planning.config.robot_config import HOME_JOINTS
 
         if base_config is None:
-            base_config = HOME_JOINTS
+            base_config = self._base_config
         full = np.array(base_config, dtype=np.float64)
-        if self._subgroup_indices is not None:
-            full[self._subgroup_indices] = config
-        self._apply_coupling(full)
+        full[self._subgroup_indices] = config
         return full
 
     def embed_path(
@@ -164,35 +177,22 @@ class MotionPlanner:
         path: np.ndarray,
         base_config: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Convert a subgroup path ``(N, sub_dof)`` to ``(N, 24)``."""
+        """Convert a subgroup path ``(N, sub_dof)`` to ``(N, 24)``.
+
+        ``base_config`` defaults to the planner's stored base — the same
+        24-DOF values the C++ collision checker injects for inactive
+        joints — so the embedded path matches what was validated.
+        """
         path = np.asarray(path, dtype=np.float64)
-        if self._subgroup_indices is None and not self._coupled_joints:
+        if self._subgroup_indices is None:
             return path.copy()
-        from autolife_planning.config.robot_config import HOME_JOINTS
 
         if base_config is None:
-            base_config = HOME_JOINTS
+            base_config = self._base_config
         n = path.shape[0]
         full_path = np.tile(np.array(base_config, dtype=np.float64), (n, 1))
-        if self._subgroup_indices is not None:
-            full_path[:, self._subgroup_indices] = path
-        for i in range(n):
-            self._apply_coupling(full_path[i])
+        full_path[:, self._subgroup_indices] = path
         return full_path
-
-    def _apply_coupling(self, full_config: np.ndarray) -> None:
-        """Set coupled slave joints from their master values, in-place."""
-        if not self._coupled_joints:
-            return
-        from autolife_planning.config.robot_config import autolife_robot_config
-
-        names = autolife_robot_config.joint_names
-        for c in self._coupled_joints:
-            master_idx = names.index(c["master"])
-            slave_idx = names.index(c["slave"])
-            full_config[slave_idx] = c["multiplier"] * full_config[master_idx] + c.get(
-                "offset", 0.0
-            )
 
     # ── Planning ──────────────────────────────────────────────────────
 
@@ -233,6 +233,7 @@ class MotionPlanner:
             self._config.planner_name,
             self._config.time_limit,
             self._config.simplify,
+            self._config.interpolate,
         )
 
         if not result.solved:
@@ -280,6 +281,7 @@ def create_planner(
     robot_name: str = "autolife",
     config: PlannerConfig | None = None,
     pointcloud: np.ndarray | None = None,
+    base_config: np.ndarray | None = None,
 ) -> MotionPlanner:
     """Create a motion planner for any robot or subgroup.
 
@@ -288,8 +290,14 @@ def create_planner(
             to list all names.
         config: Planner configuration (uses defaults if None).
         pointcloud: ``(N, 3)`` obstacle point cloud (optional).
+        base_config: 24-DOF values to inject for joints not controlled
+            by this planner (i.e. the frozen joints of a subgroup).
+            Defaults to ``HOME_JOINTS``.  Supply any 24-DOF array — for
+            example the live configuration read from your env — to pin
+            the rest of the body wherever it currently is.  Ignored for
+            the full-body ``"autolife"`` planner.
 
     Returns:
         A :class:`MotionPlanner` instance.
     """
-    return MotionPlanner(robot_name, config, pointcloud)
+    return MotionPlanner(robot_name, config, pointcloud, base_config)
