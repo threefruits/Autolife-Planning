@@ -186,6 +186,35 @@ class SymbolicContext:
         M[:3, 3] = pose.translation
         return M
 
+    def project(
+        self,
+        q_init: np.ndarray,
+        residual: ca.SX,
+        tol: float = 1e-8,
+        max_iters: int = 100,
+    ) -> np.ndarray:
+        """Project a joint configuration onto the manifold ``residual(q) = 0``.
+
+        Runs damped Gauss-Newton on the CasADi Jacobian — the same
+        iteration OMPL's ``ProjectedStateSpace`` runs internally — so
+        the returned config will pass the planner's tolerance check
+        and can be used directly as a start or goal state.
+        """
+        res_fn = ca.Function("proj_res", [self.q], [ca.reshape(residual, -1, 1)])
+        jac_fn = ca.Function("proj_jac", [self.q], [ca.jacobian(residual, self.q)])
+        q = np.asarray(q_init, dtype=np.float64).copy()
+        for _ in range(max_iters):
+            r = np.asarray(res_fn(q)).flatten()
+            if np.linalg.norm(r) < tol:
+                return q
+            J = np.asarray(jac_fn(q))
+            JJt = J @ J.T + 1e-10 * np.eye(J.shape[0])
+            q -= J.T @ np.linalg.solve(JJt, r)
+        raise RuntimeError(
+            f"SymbolicContext.project failed to converge: "
+            f"|residual|={np.linalg.norm(r):.2e} after {max_iters} iters"
+        )
+
 
 # ── Constraint ─────────────────────────────────────────────────────
 
