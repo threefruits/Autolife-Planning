@@ -618,9 +618,36 @@ def record_constrained_plane_obstacle(out: Path) -> None:
         raise RuntimeError("plane_obstacle: planning failed")
 
     full_path = planner.embed_path(result.path)
+
+    # Marker visualising the point on the robot that the constraint
+    # actually pins — the left gripper link's origin, which is where
+    # ``ctx.link_translation(EE_LINK)`` evaluates.  A small orange
+    # sphere is reset every frame to the live world pose so the
+    # viewer can literally see "this is the point that stays on the
+    # plane".
+    client = env.sim.client
+    gripper_link_idx = env.sim.link_map[EE_LINK]
+    marker_vid = client.createVisualShape(
+        shapeType=pb.GEOM_SPHERE,
+        radius=0.035,
+        rgbaColor=[1.00, 0.45, 0.05, 1.0],
+    )
+    marker_id = client.createMultiBody(
+        baseVisualShapeIndex=marker_vid,
+        basePosition=[0.0, 0.0, 0.0],
+    )
+
+    def _sync_marker(_cfg) -> None:
+        pos = client.getLinkState(env.sim.skel_id, gripper_link_idx)[0]
+        client.resetBasePositionAndOrientation(marker_id, pos, [0, 0, 0, 1])
+
+    # Initialise the marker at the start pose before the first hold.
+    env.set_configuration(full_path[0])
+    _sync_marker(full_path[0])
+
     with VideoRecorder(env, out, camera=CameraView()) as rec:
         rec.hold(seconds=0.6)
-        rec.play_path(full_path, duration=8.0)
+        rec.play_path(full_path, duration=8.0, on_frame=_sync_marker)
         rec.hold(seconds=0.6)
 
     _log("plane + sphere obstacle", out, f"{result.path.shape[0]} waypoints")

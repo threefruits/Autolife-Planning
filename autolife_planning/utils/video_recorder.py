@@ -26,7 +26,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import which
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Callable, Sequence
 
 import numpy as np
 import pybullet as pb
@@ -176,6 +176,7 @@ class VideoRecorder:
         *,
         duration: float | None = None,
         frames: int | None = None,
+        on_frame: "Callable[[np.ndarray], None] | None" = None,
     ) -> None:
         """Smoothly interpolate through *path* and capture each frame.
 
@@ -183,6 +184,12 @@ class VideoRecorder:
         ``frames = int(duration * fps)`` samples (linearly interpolating
         between consecutive waypoints), so the playback duration is the
         same regardless of how many waypoints the planner produced.
+
+        ``on_frame`` is an optional callback invoked with the current
+        interpolated configuration right after ``set_configuration``
+        and right before ``capture`` — useful for updating visual
+        markers (constraint points, EE frames, …) in lockstep with
+        the robot.
         """
         path = np.asarray(path)
         if path.ndim != 2 or len(path) == 0:
@@ -197,6 +204,8 @@ class VideoRecorder:
         if n_wp == 1:
             for _ in range(frames):
                 self.env.set_configuration(path[0])
+                if on_frame is not None:
+                    on_frame(path[0])
                 self.capture()
             return
 
@@ -209,6 +218,8 @@ class VideoRecorder:
             alpha = float(t - lo)
             cfg = (1.0 - alpha) * path[lo] + alpha * path[hi]
             self.env.set_configuration(cfg)
+            if on_frame is not None:
+                on_frame(cfg)
             self.capture()
 
     def play_sequence(

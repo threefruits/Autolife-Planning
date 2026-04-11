@@ -21,6 +21,11 @@ from autolife_planning.envs.pybullet_env import PyBulletEnv
 from autolife_planning.planning import SymbolicContext
 
 SUBGROUP = "autolife_left_arm"
+# Link_Left_Gripper's URDF origin sits in the palm / inner-knuckle
+# area — about 8 cm forward of the wrist-to-gripper joint and 6 cm
+# behind the fingertips.  That is the reference point every
+# constraint residual in this folder evaluates, so drawn markers and
+# the planner's idea of "the point on the gripper" agree.
 EE_LINK = "Link_Left_Gripper"
 
 
