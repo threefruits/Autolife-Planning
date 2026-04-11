@@ -21,12 +21,33 @@ from autolife_planning.envs.pybullet_env import PyBulletEnv
 from autolife_planning.planning import SymbolicContext
 
 SUBGROUP = "autolife_left_arm"
-# Link_Left_Gripper's URDF origin sits in the palm / inner-knuckle
-# area — about 8 cm forward of the wrist-to-gripper joint and 6 cm
-# behind the fingertips.  That is the reference point every
-# constraint residual in this folder evaluates, so drawn markers and
-# the planner's idea of "the point on the gripper" agree.
+# Rotation-reference link: Link_Left_Gripper is the rigid gripper
+# body frame, which is what the constraint residuals use for
+# orientation locks.  For translation constraints we use the TCP —
+# the symmetric midpoint between the two finger link origins — via
+# :func:`ee_translation` / :func:`ee_position` below.  That lands
+# visually at the grasping point between the fingers, which is a
+# more intuitive "this is where the constraint lives" marker than
+# either the wrist-gripper joint (inside the mesh) or
+# ``Link_Left_Gripper``'s own origin (asymmetric, chosen by the
+# SolidWorks exporter).
 EE_LINK = "Link_Left_Gripper"
+LEFT_FINGER_LINK = "Link_Left_Gripper_Left_Finger"
+RIGHT_FINGER_LINK = "Link_Left_Gripper_Right_Finger"
+
+
+def ee_translation(ctx: "SymbolicContext"):
+    """CasADi expression for the TCP (midpoint between the two fingers)."""
+    return 0.5 * (
+        ctx.link_translation(LEFT_FINGER_LINK) + ctx.link_translation(RIGHT_FINGER_LINK)
+    )
+
+
+def ee_position(ctx: "SymbolicContext", q: np.ndarray) -> np.ndarray:
+    """Numeric evaluation of the TCP at joint config *q*."""
+    left = np.asarray(ctx.evaluate_link_pose(LEFT_FINGER_LINK, q))[:3, 3]
+    right = np.asarray(ctx.evaluate_link_pose(RIGHT_FINGER_LINK, q))[:3, 3]
+    return 0.5 * (left + right)
 
 
 def setup():
@@ -63,7 +84,7 @@ def find_goal(ctx, residual, start, planner, score, n: int = 400, seed: int = 0)
             continue
         if not planner.validate(g):
             continue
-        s = float(score(ctx.evaluate_link_pose(EE_LINK, g)[:3, 3]))
+        s = float(score(ee_position(ctx, g)))
         if s > best_s:
             best_q, best_s = g, s
     if best_q is None:

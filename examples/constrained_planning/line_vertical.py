@@ -14,7 +14,15 @@ A bold yellow cylinder marks the rail.
 """
 
 import casadi as ca
-from _shared import EE_LINK, SUBGROUP, find_goal, run_demo, setup
+from _shared import (
+    EE_LINK,
+    SUBGROUP,
+    ee_position,
+    ee_translation,
+    find_goal,
+    run_demo,
+    setup,
+)
 from fire import Fire
 
 from autolife_planning.planning import Constraint, create_planner
@@ -23,15 +31,15 @@ from autolife_planning.types import PlannerConfig
 
 def main(time_limit: float = 5.0):
     env, ctx, start = setup()
-    T0 = ctx.evaluate_link_pose(EE_LINK, start)
-    p0, R0 = T0[:3, 3], T0[:3, :3]
-    left_pos = ctx.link_translation(EE_LINK)
+    p0 = ee_position(ctx, start)
+    R0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, :3]
+    tcp = ee_translation(ctx)
     left_rot = ctx.link_rotation(EE_LINK)
 
-    # The manifold: x and y pinned, rotation locked; z is free.
+    # The manifold: TCP's x and y pinned, rotation locked; z is free.
     residual: ca.SX = ca.vertcat(  # type: ignore[assignment]
-        left_pos[0] - float(p0[0]),
-        left_pos[1] - float(p0[1]),
+        tcp[0] - float(p0[0]),
+        tcp[1] - float(p0[1]),
         left_rot[:, 0] - ca.DM(R0[:, 0].tolist()),
         left_rot[:, 1] - ca.DM(R0[:, 1].tolist()),
     )
@@ -40,13 +48,13 @@ def main(time_limit: float = 5.0):
     planner = create_planner(
         SUBGROUP, config=PlannerConfig(time_limit=time_limit), constraints=[line]
     )
-    # Push the gripper as high as the manifold allows.
+    # Push the TCP as high as the manifold allows.
     goal = find_goal(
         ctx, line.residual, start, planner, score=lambda xyz: xyz[2] - p0[2]
     )
 
     # Draw the rail — extend a bit above the goal and below the start.
-    p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+    p_goal = ee_position(ctx, goal)
     env.draw_rod(
         p1=[float(p0[0]), float(p0[1]), float(p0[2]) - 0.10],
         p2=[float(p0[0]), float(p0[1]), float(p_goal[2]) + 0.10],

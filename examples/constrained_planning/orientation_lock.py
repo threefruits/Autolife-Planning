@@ -16,7 +16,7 @@ and a faint magenta rod connects them to show the swept translation.
 
 import casadi as ca
 import numpy as np
-from _shared import EE_LINK, SUBGROUP, find_goal, run_demo, setup
+from _shared import EE_LINK, SUBGROUP, ee_position, find_goal, run_demo, setup
 from fire import Fire
 
 from autolife_planning.planning import Constraint, create_planner
@@ -25,9 +25,8 @@ from autolife_planning.types import PlannerConfig
 
 def main(time_limit: float = 5.0):
     env, ctx, start = setup()
-    T0 = ctx.evaluate_link_pose(EE_LINK, start)
-    p0 = T0[:3, 3]
-    R0 = T0[:3, :3]
+    p0 = ee_position(ctx, start)
+    R0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, :3]
 
     # The manifold: first two columns of the rotation matrix pinned.
     # (Column 3 is determined by the first two via orthonormality.)
@@ -50,7 +49,7 @@ def main(time_limit: float = 5.0):
     )
 
     # Start frame, goal frame, and a thin magenta rod between them.
-    p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+    p_goal = ee_position(ctx, goal)
     env.draw_frame(p0, R0, size=0.12, radius=0.007)
     env.draw_frame(p_goal, R0, size=0.12, radius=0.007)
     env.draw_rod(p0, p_goal, radius=0.004, color=(0.85, 0.35, 0.95, 0.9))

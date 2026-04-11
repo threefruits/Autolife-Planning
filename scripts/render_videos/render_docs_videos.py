@@ -70,7 +70,39 @@ from autolife_planning.utils.video_recorder import (  # noqa: E402
 
 ASSETS_DIR = _REPO_ROOT / "docs" / "assets"
 SUBGROUP = "autolife_left_arm"
+# Rotation-reference link for the constraint residuals (Link_Left_Gripper
+# is the rigid gripper body frame).  For translation constraints we use
+# the symmetric midpoint between the two finger links — see
+# ``ee_translation`` / ``ee_position`` in examples/constrained_planning/_shared.py
+# for the rationale.
 EE_LINK = "Link_Left_Gripper"
+LEFT_FINGER_LINK = "Link_Left_Gripper_Left_Finger"
+RIGHT_FINGER_LINK = "Link_Left_Gripper_Right_Finger"
+
+
+def _ee_tcp_sym(ctx):
+    """CasADi expression for the gripper TCP (finger midpoint)."""
+    return 0.5 * (
+        ctx.link_translation(LEFT_FINGER_LINK) + ctx.link_translation(RIGHT_FINGER_LINK)
+    )
+
+
+def _ee_tcp_eval(ctx, q):
+    """Numeric evaluation of the TCP at joint config ``q``."""
+    left = np.asarray(ctx.evaluate_link_pose(LEFT_FINGER_LINK, q))[:3, 3]
+    right = np.asarray(ctx.evaluate_link_pose(RIGHT_FINGER_LINK, q))[:3, 3]
+    return 0.5 * (left + right)
+
+
+def _ee_tcp_world(env) -> np.ndarray:
+    """Live world-frame TCP position via PyBullet FK (midpoint of the fingers)."""
+    client = env.sim.client
+    body = env.sim.skel_id
+    li = env.sim.link_map[LEFT_FINGER_LINK]
+    ri = env.sim.link_map[RIGHT_FINGER_LINK]
+    lp = np.asarray(client.getLinkState(body, li)[0])
+    rp = np.asarray(client.getLinkState(body, ri)[0])
+    return 0.5 * (lp + rp)
 
 
 # ───────────────────── shared helpers ───────────────────────────────────
@@ -489,7 +521,7 @@ def _find_goal(ctx, residual, start, planner, score, n: int = 400, seed: int = 0
             continue
         if not planner.validate(g):
             continue
-        s = float(score(ctx.evaluate_link_pose(EE_LINK, g)[:3, 3]))
+        s = float(score(_ee_tcp_eval(ctx, g)))
         if s > best_s:
             best_q, best_s = g, s
     if best_q is None:
@@ -536,16 +568,16 @@ def _record_constrained(
 
 def record_constrained_plane(out: Path) -> None:
     def build(ctx, start, env):
-        p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
+        p0 = _ee_tcp_eval(ctx, start)
         return Constraint(
-            residual=ctx.link_translation(EE_LINK)[2] - float(p0[2]),
+            residual=_ee_tcp_sym(ctx)[2] - float(p0[2]),
             q_sym=ctx.q,
             name="plane_z",
         )
 
     def after(env, ctx, start, goal):
-        p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
-        p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+        p0 = _ee_tcp_eval(ctx, start)
+        p_goal = _ee_tcp_eval(ctx, goal)
         env.draw_plane(
             center=[
                 float(0.5 * (p0[0] + p_goal[0])),
@@ -567,7 +599,9 @@ def record_constrained_plane(out: Path) -> None:
 
 def record_constrained_plane_obstacle(out: Path) -> None:
     # Same seed & geometry as examples/constrained_planning/plane_with_obstacle.py
-    _GOAL_SEED = np.array([-1.26, 0.07, -1.06, 0.10, -2.42, 0.50, -0.29])
+    # Tuned so the TCP sweeps several tens of cm on the manifold and
+    # the obstacle sits cleanly on the direct path.
+    _GOAL_SEED = np.array([0.95, -0.882, -0.881, 1.593, 0.209, 0.082, -0.418])
 
     def _sample_ball(center, radius, n, seed: int = 0):
         rng = np.random.default_rng(seed)
@@ -577,15 +611,15 @@ def record_constrained_plane_obstacle(out: Path) -> None:
         return (dirs * radii[:, None] + center).astype(np.float32)
 
     env, ctx, start = _setup_constrained()
-    p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
+    p0 = _ee_tcp_eval(ctx, start)
     plane = Constraint(
-        residual=ctx.link_translation(EE_LINK)[2] - float(p0[2]),
+        residual=_ee_tcp_sym(ctx)[2] - float(p0[2]),
         q_sym=ctx.q,
         name="plane_obs",
     )
     goal = ctx.project(_GOAL_SEED, plane.residual)
 
-    p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+    p_goal = _ee_tcp_eval(ctx, goal)
     sphere_center = np.array(
         [
             float(0.5 * (p0[0] + p_goal[0])),
@@ -593,7 +627,7 @@ def record_constrained_plane_obstacle(out: Path) -> None:
             float(p0[2]) - 0.03,
         ]
     )
-    sphere_radius = 0.09
+    sphere_radius = 0.06
 
     env.draw_plane(
         center=[
@@ -620,17 +654,16 @@ def record_constrained_plane_obstacle(out: Path) -> None:
     full_path = planner.embed_path(result.path)
 
     # Marker visualising the point on the robot that the constraint
-    # actually pins — the left gripper link's origin, which is where
-    # ``ctx.link_translation(EE_LINK)`` evaluates.  A small orange
-    # sphere is reset every frame to the live world pose so the
-    # viewer can literally see "this is the point that stays on the
-    # plane".
+    # actually pins — the TCP (midpoint between the two finger link
+    # origins), which is where ``_ee_tcp_sym(ctx)`` evaluates.  A
+    # small orange sphere is reset every frame to the live world TCP
+    # position so the viewer can literally see "this is the point
+    # that stays on the plane".
     client = env.sim.client
-    gripper_link_idx = env.sim.link_map[EE_LINK]
     marker_vid = client.createVisualShape(
         shapeType=pb.GEOM_SPHERE,
-        radius=0.035,
-        rgbaColor=[1.00, 0.45, 0.05, 1.0],
+        radius=0.03,
+        rgbaColor=[1.00, 0.40, 0.05, 1.0],
     )
     marker_id = client.createMultiBody(
         baseVisualShapeIndex=marker_vid,
@@ -638,8 +671,8 @@ def record_constrained_plane_obstacle(out: Path) -> None:
     )
 
     def _sync_marker(_cfg) -> None:
-        pos = client.getLinkState(env.sim.skel_id, gripper_link_idx)[0]
-        client.resetBasePositionAndOrientation(marker_id, pos, [0, 0, 0, 1])
+        pos = _ee_tcp_world(env)
+        client.resetBasePositionAndOrientation(marker_id, pos.tolist(), [0, 0, 0, 1])
 
     # Initialise the marker at the start pose before the first hold.
     env.set_configuration(full_path[0])
@@ -655,21 +688,21 @@ def record_constrained_plane_obstacle(out: Path) -> None:
 
 def record_constrained_line_horizontal(out: Path) -> None:
     def build(ctx, start, env):
-        T0 = ctx.evaluate_link_pose(EE_LINK, start)
-        p0, R0 = T0[:3, 3], T0[:3, :3]
-        left = ctx.link_translation(EE_LINK)
+        p0 = _ee_tcp_eval(ctx, start)
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
+        tcp = _ee_tcp_sym(ctx)
         left_rot = ctx.link_rotation(EE_LINK)
         residual = ca.vertcat(
-            left[1] - float(p0[1]),
-            left[2] - float(p0[2]),
+            tcp[1] - float(p0[1]),
+            tcp[2] - float(p0[2]),
             left_rot[:, 0] - ca.DM(R0[:, 0].tolist()),
             left_rot[:, 1] - ca.DM(R0[:, 1].tolist()),
         )
         return Constraint(residual=residual, q_sym=ctx.q, name="line_h")
 
     def after(env, ctx, start, goal):
-        p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
-        p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+        p0 = _ee_tcp_eval(ctx, start)
+        p_goal = _ee_tcp_eval(ctx, goal)
         env.draw_rod(
             p1=[float(p0[0]) - 0.10, float(p0[1]), float(p0[2])],
             p2=[float(p_goal[0]) + 0.10, float(p0[1]), float(p0[2])],
@@ -688,21 +721,21 @@ def record_constrained_line_horizontal(out: Path) -> None:
 
 def record_constrained_line_vertical(out: Path) -> None:
     def build(ctx, start, env):
-        T0 = ctx.evaluate_link_pose(EE_LINK, start)
-        p0, R0 = T0[:3, 3], T0[:3, :3]
-        left = ctx.link_translation(EE_LINK)
+        p0 = _ee_tcp_eval(ctx, start)
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
+        tcp = _ee_tcp_sym(ctx)
         left_rot = ctx.link_rotation(EE_LINK)
         residual = ca.vertcat(
-            left[0] - float(p0[0]),
-            left[1] - float(p0[1]),
+            tcp[0] - float(p0[0]),
+            tcp[1] - float(p0[1]),
             left_rot[:, 0] - ca.DM(R0[:, 0].tolist()),
             left_rot[:, 1] - ca.DM(R0[:, 1].tolist()),
         )
         return Constraint(residual=residual, q_sym=ctx.q, name="line_v")
 
     def after(env, ctx, start, goal):
-        p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
-        p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+        p0 = _ee_tcp_eval(ctx, start)
+        p_goal = _ee_tcp_eval(ctx, goal)
         env.draw_rod(
             p1=[float(p0[0]), float(p0[1]), float(p0[2]) - 0.10],
             p2=[float(p0[0]), float(p0[1]), float(p_goal[2]) + 0.10],
@@ -721,8 +754,7 @@ def record_constrained_line_vertical(out: Path) -> None:
 
 def record_constrained_orientation_lock(out: Path) -> None:
     def build(ctx, start, env):
-        T0 = ctx.evaluate_link_pose(EE_LINK, start)
-        R0 = T0[:3, :3]
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
         left_rot = ctx.link_rotation(EE_LINK)
         residual = ca.vertcat(
             left_rot[:, 0] - ca.DM(R0[:, 0].tolist()),
@@ -731,9 +763,9 @@ def record_constrained_orientation_lock(out: Path) -> None:
         return Constraint(residual=residual, q_sym=ctx.q, name="orient_lock")
 
     def after(env, ctx, start, goal):
-        T0 = ctx.evaluate_link_pose(EE_LINK, start)
-        p0, R0 = T0[:3, 3], T0[:3, :3]
-        p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+        p0 = _ee_tcp_eval(ctx, start)
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
+        p_goal = _ee_tcp_eval(ctx, goal)
         env.draw_frame(p0, R0, size=0.12, radius=0.007)
         env.draw_frame(p_goal, R0, size=0.12, radius=0.007)
         env.draw_rod(p0, p_goal, radius=0.004, color=(0.85, 0.35, 0.95, 0.9))

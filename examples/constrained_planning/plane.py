@@ -12,7 +12,7 @@ manifold in 3D.
     pixi run python examples/constrained_planning/plane.py
 """
 
-from _shared import EE_LINK, SUBGROUP, find_goal, run_demo, setup
+from _shared import SUBGROUP, ee_position, ee_translation, find_goal, run_demo, setup
 from fire import Fire
 
 from autolife_planning.planning import Constraint, create_planner
@@ -21,11 +21,11 @@ from autolife_planning.types import PlannerConfig
 
 def main(time_limit: float = 5.0):
     env, ctx, start = setup()
-    p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
+    p0 = ee_position(ctx, start)
 
-    # The manifold: left gripper z equals its home value.
+    # The manifold: the gripper TCP's z equals its home value.
     plane = Constraint(
-        residual=ctx.link_translation(EE_LINK)[2] - float(p0[2]),
+        residual=ee_translation(ctx)[2] - float(p0[2]),
         q_sym=ctx.q,
         name="plane_z",
     )
@@ -41,11 +41,11 @@ def main(time_limit: float = 5.0):
         score=lambda xyz: abs(xyz[1] - p0[1]) + 0.3 * abs(xyz[0] - p0[0]),
     )
 
-    # Draw the plane, centred between the start and goal gripper positions.
-    # The plate sits a few cm below the gripper link so the fingers don't
-    # clip into it visually, and it's drawn wide enough that the gripper
+    # Draw the plane, centred between the start and goal TCP positions.
+    # The plate sits a few cm below the TCP so the fingers don't clip
+    # into it visually, and it's drawn wide enough that the gripper
     # never rides off the edge during the solve.
-    p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+    p_goal = ee_position(ctx, goal)
     env.draw_plane(
         center=[
             float(0.5 * (p0[0] + p_goal[0])),

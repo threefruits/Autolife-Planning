@@ -15,19 +15,19 @@ volumetric point cloud so VAMP's SIMD collision checker sees it.
 """
 
 import numpy as np
-from _shared import EE_LINK, SUBGROUP, run_demo, setup
+from _shared import SUBGROUP, ee_position, ee_translation, run_demo, setup
 from fire import Fire
 
 from autolife_planning.planning import Constraint, create_planner
 from autolife_planning.types import PlannerConfig
 
 # Known-good joint seed for the left-arm subgroup: after projection
-# onto the z=z0 manifold it lands with the gripper ~0.56 m in front
-# of HOME, far enough that a 9 cm sphere fits cleanly in the swept
+# onto the z=z0 manifold it lands with the TCP ~18 cm in front of
+# HOME, far enough that a small sphere fits cleanly in the swept
 # midpoint without intersecting the arm's HOME configuration.  All
 # other demos use the random find_goal search; this one needs a
 # specific geometry so the sphere actually blocks the direct sweep.
-_GOAL_SEED = np.array([-1.26, 0.07, -1.06, 0.10, -2.42, 0.50, -0.29])
+_GOAL_SEED = np.array([0.95, -0.882, -0.881, 1.593, 0.209, 0.082, -0.418])
 
 
 def _sample_ball(center: np.ndarray, radius: float, n: int, seed: int = 0):
@@ -41,11 +41,11 @@ def _sample_ball(center: np.ndarray, radius: float, n: int, seed: int = 0):
 
 def main(planner_name: str = "rrtc", time_limit: float = 10.0):
     env, ctx, start = setup()
-    p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
+    p0 = ee_position(ctx, start)
 
-    # The manifold: left gripper z equals its home value.
+    # The manifold: the gripper TCP's z equals its home value.
     plane = Constraint(
-        residual=ctx.link_translation(EE_LINK)[2] - float(p0[2]),
+        residual=ee_translation(ctx)[2] - float(p0[2]),
         q_sym=ctx.q,
         name="plane_with_obs",
     )
@@ -56,7 +56,7 @@ def main(planner_name: str = "rrtc", time_limit: float = 10.0):
 
     # Drop the sphere on the swept midpoint, nudged just below the
     # plane so its equator sits at the gripper's height.
-    p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+    p_goal = ee_position(ctx, goal)
     sphere_center = np.array(
         [
             float(0.5 * (p0[0] + p_goal[0])),
@@ -64,7 +64,7 @@ def main(planner_name: str = "rrtc", time_limit: float = 10.0):
             float(p0[2]) - 0.03,
         ]
     )
-    sphere_radius = 0.09
+    sphere_radius = 0.06
 
     env.draw_plane(
         center=[
