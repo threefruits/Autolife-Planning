@@ -259,3 +259,139 @@ class PyBulletEnv(BaseEnv):
 
         self.sim.client.configureDebugVisualizer(pb.COV_ENABLE_RENDERING, 1)
         return multibody_id
+
+    # ── scene-setup primitives ────────────────────────────────────────
+
+    def draw_plane(
+        self,
+        center,
+        half_sizes: tuple[float, float] = (0.35, 0.35),
+        normal=(0.0, 0.0, 1.0),
+        color: tuple[float, float, float, float] = (0.15, 0.55, 0.95, 0.35),
+    ) -> int:
+        """Visual-only translucent plate at *center*.
+
+        The plate is a thin ``GEOM_BOX`` (1 mm thick along its normal),
+        oriented so its thin axis lines up with *normal*.  Useful for
+        showing a plane manifold — e.g. ``z = z0`` — in the scene.
+        """
+        client = self.sim.client
+        vid = client.createVisualShape(
+            shapeType=pb.GEOM_BOX,
+            halfExtents=[float(half_sizes[0]), float(half_sizes[1]), 0.001],
+            rgbaColor=list(color),
+        )
+        return client.createMultiBody(
+            baseVisualShapeIndex=vid,
+            basePosition=list(np.asarray(center, dtype=float)),
+            baseOrientation=_quat_from_z_axis(normal),
+        )
+
+    def draw_rod(
+        self,
+        p1,
+        p2,
+        radius: float = 0.008,
+        color: tuple[float, float, float, float] = (0.20, 0.90, 0.30, 1.0),
+    ) -> int | None:
+        """Visual-only solid rod (``GEOM_CYLINDER``) from *p1* to *p2*.
+
+        Uses a real 3D cylinder rather than ``addUserDebugLine`` so the
+        segment has a proper thickness, catches lighting, and shows up
+        correctly in screenshots.  Returns ``None`` if *p1* and *p2*
+        coincide.
+        """
+        p1 = np.asarray(p1, dtype=float)
+        p2 = np.asarray(p2, dtype=float)
+        delta = p2 - p1
+        length = float(np.linalg.norm(delta))
+        if length < 1e-9:
+            return None
+        client = self.sim.client
+        vid = client.createVisualShape(
+            shapeType=pb.GEOM_CYLINDER,
+            radius=float(radius),
+            length=length,
+            rgbaColor=list(color),
+        )
+        return client.createMultiBody(
+            baseVisualShapeIndex=vid,
+            basePosition=(0.5 * (p1 + p2)).tolist(),
+            baseOrientation=_quat_from_z_axis(delta / length),
+        )
+
+    def draw_sphere(
+        self,
+        center,
+        radius: float,
+        color: tuple[float, float, float, float] = (0.95, 0.30, 0.30, 0.55),
+    ) -> int:
+        """Visual-only sphere — handy for marking obstacles or targets."""
+        client = self.sim.client
+        vid = client.createVisualShape(
+            shapeType=pb.GEOM_SPHERE,
+            radius=float(radius),
+            rgbaColor=list(color),
+        )
+        return client.createMultiBody(
+            baseVisualShapeIndex=vid,
+            basePosition=list(np.asarray(center, dtype=float)),
+        )
+
+    def draw_frame(
+        self,
+        position,
+        rotation,
+        size: float = 0.12,
+        radius: float = 0.006,
+    ) -> list[int]:
+        """RGB coordinate axes at *position* with a 3x3 *rotation* matrix.
+
+        Red / green / blue rods along the rotation's first / second /
+        third columns — useful for visualising an orientation-lock
+        constraint (the frame at the start and goal look identical).
+        """
+        position = np.asarray(position, dtype=float)
+        rotation = np.asarray(rotation, dtype=float)
+        colors = [
+            (1.0, 0.15, 0.15, 1.0),
+            (0.15, 1.0, 0.15, 1.0),
+            (0.15, 0.40, 1.0, 1.0),
+        ]
+        ids: list[int] = []
+        for i, color in enumerate(colors):
+            tip = position + rotation[:, i] * size
+            body_id = self.draw_rod(position, tip, radius=radius, color=color)
+            if body_id is not None:
+                ids.append(body_id)
+        return ids
+
+
+def _quat_from_z_axis(direction) -> list[float]:
+    """Quaternion ``[x, y, z, w]`` that rotates ``+Z`` onto *direction*.
+
+    Used to orient thin ``GEOM_BOX`` plates and ``GEOM_CYLINDER`` rods,
+    both of which default to the +Z axis in PyBullet.
+    """
+    d = np.asarray(direction, dtype=float)
+    n = float(np.linalg.norm(d))
+    if n < 1e-12:
+        return [0.0, 0.0, 0.0, 1.0]
+    d = d / n
+    z = np.array([0.0, 0.0, 1.0])
+    dot = float(np.dot(z, d))
+    if dot > 0.99999:
+        return [0.0, 0.0, 0.0, 1.0]
+    if dot < -0.99999:
+        # 180° around X
+        return [1.0, 0.0, 0.0, 0.0]
+    axis = np.cross(z, d)
+    axis /= np.linalg.norm(axis)
+    angle = float(np.arccos(dot))
+    s = float(np.sin(angle / 2.0))
+    return [
+        float(axis[0] * s),
+        float(axis[1] * s),
+        float(axis[2] * s),
+        float(np.cos(angle / 2.0)),
+    ]

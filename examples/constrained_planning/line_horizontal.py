@@ -1,0 +1,55 @@
+"""Line constraint: the left gripper rides a horizontal rail.
+
+Two holonomic equations in a single stacked residual — the
+gripper's y and z coordinates are pinned to their home values, so
+the only free Cartesian DOF at the end effector is x.  The arm has
+7 joints and the constraint consumes 2 equations, so there's a
+5-dimensional null space the planner can exploit.
+
+A bold green cylinder marks the rail.
+
+    pixi run python examples/constrained_planning/line_horizontal.py
+"""
+
+import casadi as ca
+from _shared import EE_LINK, SUBGROUP, find_goal, run_demo, setup
+from fire import Fire
+
+from autolife_planning.planning import Constraint, create_planner
+from autolife_planning.types import PlannerConfig
+
+
+def main(time_limit: float = 5.0):
+    env, ctx, start = setup()
+    p0 = ctx.evaluate_link_pose(EE_LINK, start)[:3, 3]
+    left_pos = ctx.link_translation(EE_LINK)
+
+    # The manifold: y and z are pinned; x is free.
+    residual: ca.SX = ca.vertcat(  # type: ignore[assignment]
+        left_pos[1] - float(p0[1]),
+        left_pos[2] - float(p0[2]),
+    )
+    line = Constraint(residual=residual, q_sym=ctx.q, name="line_h")
+
+    planner = create_planner(
+        SUBGROUP, config=PlannerConfig(time_limit=time_limit), constraints=[line]
+    )
+    # Push the gripper as far forward along the rail as the manifold allows.
+    goal = find_goal(
+        ctx, line.residual, start, planner, score=lambda xyz: xyz[0] - p0[0]
+    )
+
+    # Draw the rail — extend past both endpoints so it reads as "a line".
+    p_goal = ctx.evaluate_link_pose(EE_LINK, goal)[:3, 3]
+    env.draw_rod(
+        p1=[float(p0[0]) - 0.10, float(p0[1]), float(p0[2])],
+        p2=[float(p_goal[0]) + 0.10, float(p0[1]), float(p0[2])],
+        radius=0.008,
+        color=(0.20, 0.90, 0.30, 1.0),
+    )
+
+    run_demo(env, planner, start, goal, "line_h: gripper rides a horizontal rail")
+
+
+if __name__ == "__main__":
+    Fire(main)
