@@ -46,8 +46,13 @@ def base_with_stance(stance: dict[str, float]) -> np.ndarray:
 
 def plan_and_show(
     env, robot_name: str, base: np.ndarray, config: PlannerConfig, label: str
-):
-    """Plan one subgroup against *base* and animate it."""
+) -> bool:
+    """Plan one subgroup against *base* and animate it interactively.
+
+    Returns ``True`` if the user pressed ``n`` to advance to the next
+    demo, ``False`` if the user closed the GUI window (in which case the
+    caller should stop iterating).
+    """
     planner = create_planner(robot_name, config=config, base_config=base)
     start = planner.extract_config(base)
     goal = planner.sample_valid()
@@ -57,9 +62,9 @@ def plan_and_show(
     print(f"  [{label}] {result.status.value} — {n_wp} waypoints")
 
     if result.success and result.path is not None:
-        env.animate_path(planner.embed_path(result.path))
-
-    env.wait_key("n", f"[{label}] press 'n' for next")
+        return env.animate_path(planner.embed_path(result.path), next_key="n")
+    env.wait_key("n", f"[{label}] no path — press 'n' for next")
+    return env.sim.client.isConnected()
 
 
 def main(planner_name: str = "bitstar", time_limit: float = 0.5):
@@ -93,11 +98,13 @@ def main(planner_name: str = "bitstar", time_limit: float = 0.5):
     for stance_name, stance in STANCES.items():
         base = base_with_stance(stance)
         for robot_name in SUBGROUPS:
-            plan_and_show(
+            cont = plan_and_show(
                 env, robot_name, base, config, f"{robot_name} @ {stance_name}"
             )
+            if not cont:
+                return
 
-    env.wait_key("q", "All done — press 'q' to quit")
+    env.wait_for_close()
 
 
 if __name__ == "__main__":

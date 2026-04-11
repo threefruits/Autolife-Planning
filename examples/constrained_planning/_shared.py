@@ -67,7 +67,12 @@ def find_goal(ctx, residual, start, planner, score, n: int = 400, seed: int = 0)
 
 
 def run_demo(env, planner, start, goal, title: str) -> None:
-    """Plan from start to goal, print a one-line summary, animate the path."""
+    """Plan from start to goal, print a one-line summary, animate the path.
+
+    The animation is interactive — ``env.animate_path`` blocks on the
+    PyBullet window with space/arrow-key controls and only returns when
+    the user closes the viewer.
+    """
     print(f"── {title} ──")
     result = planner.plan(start, goal)
     n = result.path.shape[0] if result.path is not None else 0
@@ -77,4 +82,5 @@ def run_demo(env, planner, start, goal, title: str) -> None:
     )
     if result.success and result.path is not None:
         env.animate_path(planner.embed_path(result.path), fps=60)
-    env.wait_key("q", "press 'q' to quit")
+    else:
+        env.wait_for_close()
