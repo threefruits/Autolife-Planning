@@ -82,14 +82,19 @@ SCENE_PROPS = [
 ]
 
 # ── Robot base poses ──────────────────────────────────────────────
-BASE_NEAR_TABLE_EAST = np.array([-1.30, 1.67, np.pi])
+BASE_SQUAT_EAST = np.array([-1.10, 1.67, np.pi])  # for squat + under-table pick
+BASE_PLACE_EAST = np.array([-1.30, 1.67, np.pi])  # for placing on the table top
 BASE_NEAR_SOFA = np.array([2.00, 1.30, -np.pi / 2])
 BASE_NEAR_COFFEE = np.array([3.60, 1.30, -np.pi / 2])
 STANDING_STANCE = np.array([0.0, 0.0, 0.0])
-SQUAT_STANCE = np.array([1.0, 2.0, 0.0])
+# Sit-down pose: ankle=-1.20, knee=-2.40 (lower leg folds backward,
+# opposite to human), waist_pitch=-1.20 (torso compensates to stay
+# upright).
+SQUAT_STANCE = np.array([-1.20, -2.40, -1.20])
+BODY_WAIST_PITCH_IDX = 2  # waist_pitch inside the 21-DOF body vector
 
 # ── Graspable positions + approach vectors ────────────────────────
-APPLE_MESH_INIT = np.array([-2.05, 1.67, 0.32])
+APPLE_MESH_INIT = np.array([-1.50, 1.67, 0.15])  # on the floor near the table
 APPLE_MESH_PLACE = np.array([-2.05, 1.67, 0.75])
 APPLE_APPROACH = np.array([-1.0, 0.0, 0.0])
 APPLE_GRASP_Z = 0.13
@@ -110,13 +115,13 @@ PREGRASP_OFFSET_UNDER_TABLE = 0.05
 _NH = [0.0, 0.0, 0.0, -0.7, 0.14, -0.09, -2.31, -0.04, -0.4, 0.0]
 
 APPLE_GRASP_FULL = np.array(
-    [-1.3, 1.67, 3.14159, 1.0, 2.0, 1.69081, -1.29081,
-     0.26294, -0.89298, -0.42125, 1.79897, -0.44705,
-     -1.16186, -0.14746] + _NH)
+    [-1.1, 1.67, 3.14159, -1.2, -2.4, -0.14577, -1.31109,
+     0.40492, -0.1654, -0.10294, 2.02168, -0.00743,
+     -1.28599, -0.85198] + _NH)
 APPLE_PREGRASP_FULL = np.array(
-    [-1.3, 1.67, 3.14159, 1.0, 2.0, 1.66137, -1.28397,
-     0.30579, -0.77443, -0.34967, 1.86676, -0.40673,
-     -1.17836, -0.1811] + _NH)
+    [-1.1, 1.67, 3.14159, -1.2, -2.4, -0.09358, -1.30795,
+     0.43711, -0.06845, -0.04382, 1.99664, 0.00559,
+     -1.29513, -0.87619] + _NH)
 APPLE_PLACE_FULL = np.array(
     [-1.3, 1.67, 3.14159, 0.0, 0.0, 0.54695, -0.94467,
      -0.39819, -0.36978, -0.32065, 1.66405, 0.13771,
@@ -239,6 +244,22 @@ def grasp_line_endpoints(finger_xyz, approach, pregrasp_offset=PREGRASP_OFFSET):
     return grasp_pos, pregrasp_pos
 
 
+def fk_line_endpoints(grasp_full, pregrasp_full, subgroup, active_idx):
+    """Compute the gripper link positions from the PLANNER's own FK.
+
+    The IK solver and SymbolicContext use different URDFs, so their FK
+    differs.  This function ensures the line constraint endpoints match
+    the planner's FK — the hardcoded configs already place the gripper
+    at these positions by construction.
+    """
+    ctx = SymbolicContext(subgroup, base_config=grasp_full)
+    gp = np.asarray(ctx.evaluate_link_pose(GRIPPER_LINK, grasp_full[active_idx]))[:3, 3]
+    pp = np.asarray(ctx.evaluate_link_pose(GRIPPER_LINK, pregrasp_full[active_idx]))[
+        :3, 3
+    ]
+    return gp, pp
+
+
 # ── Planning wrappers ──────────────────────────────────────────────
 
 
@@ -251,62 +272,57 @@ def _report(label, result):
     )
 
 
-def plan_arm_free(current_full, goal_full, cloud, label):
-    p = create_planner(
-        ARM_SUBGROUP,
-        config=PlannerConfig(planner_name="rrtc", time_limit=ARM_FREE_TIME),
-        pointcloud=cloud,
-        base_config=current_full,
-    )
-    r = p.plan(current_full[TORSO_ARM_IDX], goal_full[TORSO_ARM_IDX])
+def _use(planner, subgroup, current_full, constraints=None):
+    """Switch the shared planner to a subgroup and optionally set constraints."""
+    planner.set_subgroup(subgroup, base_config=current_full)
+    if constraints:
+        planner.set_constraints(constraints)
+
+
+def _plan(planner, start, goal, label, time_limit=ARM_FREE_TIME):
+    """Plan, report, assert success, and return the embedded full-DOF path."""
+    r = planner.plan(start, goal, time_limit=time_limit)
     _report(label, r)
     assert r.success and r.path is not None, f"{label}: {r.status.value}"
-    return p.embed_path(r.path)
+    return planner.embed_path(r.path)
 
 
-def plan_arm_line(current_full, goal_full, p_from, p_to, cloud, label):
+def _bounds(planner):
+    return np.array(planner._planner.lower_bounds()), np.array(
+        planner._planner.upper_bounds()
+    )
+
+
+def plan_arm_free(planner, current_full, goal_full, label):
+    _use(planner, ARM_SUBGROUP, current_full)
+    return _plan(planner, current_full[TORSO_ARM_IDX], goal_full[TORSO_ARM_IDX], label)
+
+
+def plan_arm_line(planner, current_full, goal_full, p_from, p_to, label):
     ctx = SymbolicContext(ARM_SUBGROUP, base_config=current_full)
     c = make_line_constraint(ctx, p_from, p_to, f"line_{_sanitize(label)}")
-    p = create_planner(
-        ARM_SUBGROUP,
-        config=PlannerConfig(planner_name="rrtc", time_limit=ARM_LINE_TIME),
-        pointcloud=cloud,
-        base_config=current_full,
-        constraints=[c],
-    )
-    lo, hi = np.array(p._planner.lower_bounds()), np.array(p._planner.upper_bounds())
+    _use(planner, ARM_SUBGROUP, current_full, [c])
+    lo, hi = _bounds(planner)
     start = _project_and_clamp(
         ctx, c.residual, current_full[TORSO_ARM_IDX].copy(), lo, hi
     )
     goal = _project_and_clamp(ctx, c.residual, goal_full[TORSO_ARM_IDX].copy(), lo, hi)
-    r = p.plan(start, goal)
-    _report(label, r)
-    assert r.success and r.path is not None, f"{label}: {r.status.value}"
-    return p.embed_path(r.path)
+    return _plan(planner, start, goal, label, ARM_LINE_TIME)
 
 
-def plan_body_free(current_full, goal_full, cloud, label):
+def plan_body_free(planner, current_full, goal_full, label):
     ctx = SymbolicContext(BODY_SUBGROUP, base_config=current_full)
     lp = make_leg_pin(
         ctx, current_full[3], current_full[4], f"legpin_{_sanitize(label)}"
     )
-    p = create_planner(
-        BODY_SUBGROUP,
-        config=PlannerConfig(planner_name="rrtc", time_limit=ARM_FREE_TIME),
-        pointcloud=cloud,
-        base_config=current_full,
-        constraints=[lp],
-    )
-    lo, hi = np.array(p._planner.lower_bounds()), np.array(p._planner.upper_bounds())
+    _use(planner, BODY_SUBGROUP, current_full, [lp])
+    lo, hi = _bounds(planner)
     start = _project_and_clamp(ctx, lp.residual, current_full[BODY_IDX].copy(), lo, hi)
     goal = _project_and_clamp(ctx, lp.residual, goal_full[BODY_IDX].copy(), lo, hi)
-    r = p.plan(start, goal)
-    _report(label, r)
-    assert r.success and r.path is not None, f"{label}: {r.status.value}"
-    return p.embed_path(r.path)
+    return _plan(planner, start, goal, label)
 
 
-def plan_body_line(current_full, goal_full, p_from, p_to, cloud, label):
+def plan_body_line(planner, current_full, goal_full, p_from, p_to, label):
     ctx = SymbolicContext(BODY_SUBGROUP, base_config=current_full)
     leg_res = ca.vertcat(
         ctx.q[BODY_ANKLE_IDX] - ca.DM(float(current_full[3])),
@@ -326,46 +342,29 @@ def plan_body_line(current_full, goal_full, p_from, p_to, cloud, label):
     )
     combined = ca.vertcat(leg_res, line_res)
     c = Constraint(residual=combined, q_sym=ctx.q, name=f"bodyline_{_sanitize(label)}")
-    p = create_planner(
-        BODY_SUBGROUP,
-        config=PlannerConfig(planner_name="rrtc", time_limit=ARM_LINE_TIME),
-        pointcloud=cloud,
-        base_config=current_full,
-        constraints=[c],
-    )
-    lo, hi = np.array(p._planner.lower_bounds()), np.array(p._planner.upper_bounds())
+    _use(planner, BODY_SUBGROUP, current_full, [c])
+    lo, hi = _bounds(planner)
     start = _project_and_clamp(ctx, c.residual, current_full[BODY_IDX].copy(), lo, hi)
     goal = _project_and_clamp(ctx, c.residual, goal_full[BODY_IDX].copy(), lo, hi)
-    r = p.plan(start, goal)
-    _report(label, r)
-    assert r.success and r.path is not None, f"{label}: {r.status.value}"
-    return p.embed_path(r.path)
+    return _plan(planner, start, goal, label, ARM_LINE_TIME)
 
 
-def plan_base(current_full, goal_base, cloud, label):
-    p = create_planner(
-        BASE_SUBGROUP,
-        config=PlannerConfig(planner_name="rrtc", time_limit=BASE_NAV_TIME),
-        pointcloud=cloud,
-        base_config=current_full,
+def plan_base(planner, current_full, goal_base, label):
+    _use(planner, BASE_SUBGROUP, current_full)
+    return _plan(
+        planner,
+        current_full[:3].copy(),
+        np.asarray(goal_base, dtype=np.float64),
+        label,
+        BASE_NAV_TIME,
     )
-    r = p.plan(current_full[:3].copy(), np.asarray(goal_base, dtype=np.float64))
-    _report(label, r)
-    assert r.success and r.path is not None, f"{label}: {r.status.value}"
-    return p.embed_path(r.path)
 
 
-def plan_height(current_full, target, cloud, label):
-    p = create_planner(
-        HEIGHT_SUBGROUP,
-        config=PlannerConfig(planner_name="rrtc", time_limit=ARM_FREE_TIME),
-        pointcloud=cloud,
-        base_config=current_full,
+def plan_body_squat(planner, current_full, goal_full, label):
+    _use(planner, BODY_SUBGROUP, current_full)
+    return _plan(
+        planner, current_full[BODY_IDX].copy(), goal_full[BODY_IDX].copy(), label
     )
-    r = p.plan(current_full[HEIGHT_IDX].copy(), np.asarray(target, dtype=np.float64))
-    _report(label, r)
-    assert r.success and r.path is not None, f"{label}: {r.status.value}"
-    return p.embed_path(r.path)
 
 
 # ── Playback ───────────────────────────────────────────────────────
@@ -497,10 +496,9 @@ def play_segments(env, segments, gripper_link_idx, fps=60.0):
 def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     env = PyBulletEnv(autolife_robot_config, visualize=visualize)
     print("── scene setup ──")
-    load_room_meshes(env)
     cloud = load_room_pointcloud(stride=pcd_stride)
     print(f"  collision cloud: {len(cloud)} points (stride={pcd_stride})")
-    env.add_pointcloud(cloud[::4], pointsize=2)
+    env.add_pointcloud(cloud[::2], pointsize=2)
     if visualize:
         env.sim.client.resetDebugVisualizerCamera(
             cameraDistance=4.5,
@@ -509,8 +507,22 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
             cameraTargetPosition=[-0.5, -0.3, 0.7],
         )
 
+    # Create the planner ONCE — reused for every plan() call.
+    import time as _time
+
+    t_build = _time.perf_counter()
+    planner = create_planner(
+        "autolife",
+        config=PlannerConfig(planner_name="rrtc"),
+        pointcloud=cloud,
+    )
+    t_build = _time.perf_counter() - t_build
+    print(f"  planner built in {t_build*1000:.0f} ms (reused for all calls)")
+
     current = HOME_JOINTS.copy()
-    current[:3] = BASE_NEAR_TABLE_EAST
+    current[:3] = BASE_SQUAT_EAST
+    # Zero waist yaw so the upper body is perfectly straight/vertical.
+    current[6] = 0.0
     env.set_configuration(current)
 
     apple_id = place_graspable(env, "apple", APPLE_MESH_INIT)
@@ -529,25 +541,28 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
             )
         )
 
-    # ── Stage 1a: squat (height subgroup) ──
-    print("\n── stage 1a: squat ──")
-    path = plan_height(current, SQUAT_STANCE, cloud, "s1a squat")
+    # ── Hold home pose so viewer sees the robot standing straight ──
+    add(np.tile(current, (60, 1)), "home pose")
+
+    # ── Stage 1a: squat with back-fold legs (body + waist_pitch pin) ──
+    print("\n── stage 1a: squat (body subgroup + waist_pitch constraint) ──")
+    squat_goal = current.copy()
+    squat_goal[3:6] = SQUAT_STANCE
+    path = plan_body_squat(planner, current, squat_goal, "s1a squat")
     add(path, "s1a squat")
     current = path[-1]
 
     # ── Stage 1b: pick apple under table (body + leg-pin) ──
     print("\n── stage 1b: pick apple under table (body + leg-pin constraint) ──")
-    gp, pp = grasp_line_endpoints(
-        APPLE_MESH_INIT + [0, 0, APPLE_GRASP_Z],
-        APPLE_APPROACH,
-        PREGRASP_OFFSET_UNDER_TABLE,
+    gp, pp = fk_line_endpoints(
+        APPLE_GRASP_FULL, APPLE_PREGRASP_FULL, BODY_SUBGROUP, BODY_IDX
     )
 
-    path = plan_body_free(current, APPLE_PREGRASP_FULL, cloud, "s1b free→pregrasp")
+    path = plan_body_free(planner, current, APPLE_PREGRASP_FULL, "s1b free→pregrasp")
     add(path, "s1b approach")
     current = path[-1]
 
-    path = plan_body_line(current, APPLE_GRASP_FULL, pp, gp, cloud, "s1b approach")
+    path = plan_body_line(planner, current, APPLE_GRASP_FULL, pp, gp, "s1b approach")
     add(path, "s1b approach line")
     current = path[-1]
 
@@ -558,51 +573,59 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     )
     apple_tf = capture_local_transform(env, gripper_link, apple_id)
 
-    path = plan_body_line(current, APPLE_PREGRASP_FULL, gp, pp, cloud, "s1b lift")
+    path = plan_body_line(planner, current, APPLE_PREGRASP_FULL, gp, pp, "s1b lift")
     add(path, "s1b lift", apple_id, apple_tf)
     current = path[-1]
 
-    # ── Stage 1c: stand up (height, apple attached) ──
-    print("\n── stage 1c: stand up ──")
-    path = plan_height(current, STANDING_STANCE, cloud, "s1c stand")
+    # ── Stage 1c: stand up (body + waist_pitch pin, apple attached) ──
+    print("\n── stage 1c: stand up (body subgroup + waist_pitch constraint) ──")
+    stand_goal = current.copy()
+    stand_goal[3:6] = STANDING_STANCE
+    path = plan_body_squat(planner, current, stand_goal, "s1c stand")
     add(path, "s1c stand", apple_id, apple_tf)
+    current = path[-1]
+
+    # ── Nav closer to table for placement ──
+    print("\n── nav → table placement position ──")
+    path = plan_base(planner, current, BASE_PLACE_EAST, "nav→place pos")
+    add(path, "nav→place pos", apple_id, apple_tf)
     current = path[-1]
 
     # ── Stage 2: place apple on table (torso+arm) ──
     print("\n── stage 2: place apple on table ──")
-    gp2, pp2 = grasp_line_endpoints(
-        APPLE_MESH_PLACE + [0, 0, APPLE_GRASP_Z], APPLE_APPROACH
+    gp2, pp2 = fk_line_endpoints(
+        APPLE_PLACE_FULL, APPLE_PREPLACE_FULL, ARM_SUBGROUP, TORSO_ARM_IDX
     )
 
-    path = plan_arm_free(current, APPLE_PREPLACE_FULL, cloud, "s2 free→preplace")
+    path = plan_arm_free(planner, current, APPLE_PREPLACE_FULL, "s2 free→preplace")
     add(path, "s2 carry", apple_id, apple_tf)
     current = path[-1]
 
-    path = plan_arm_line(current, APPLE_PLACE_FULL, pp2, gp2, cloud, "s2 lower")
+    path = plan_arm_line(planner, current, APPLE_PLACE_FULL, pp2, gp2, "s2 lower")
     add(path, "s2 lower", apple_id, apple_tf)
     current = path[-1]
 
-    path = plan_arm_line(current, APPLE_PREPLACE_FULL, gp2, pp2, cloud, "s2 retreat")
+    path = plan_arm_line(planner, current, APPLE_PREPLACE_FULL, gp2, pp2, "s2 retreat")
     add(path, "s2 retreat")
     current = path[-1]
 
     # ── Stage 3: nav to sofa ──
     print("\n── stage 3: nav → sofa ──")
-    path = plan_base(current, BASE_NEAR_SOFA, cloud, "s3 nav→sofa")
+    path = plan_base(planner, current, BASE_NEAR_SOFA, "s3 nav→sofa")
     add(path, "s3 nav→sofa")
     current = path[-1]
 
     # ── Stage 4: pick bottle from sofa ──
     print("\n── stage 4: pick bottle from sofa ──")
-    gp3, pp3 = grasp_line_endpoints(
-        BOTTLE_MESH_INIT + [0, 0, BOTTLE_GRASP_Z], BOTTLE_APPROACH
+    gp3, pp3 = fk_line_endpoints(
+        BOTTLE_GRASP_FULL, BOTTLE_PREGRASP_FULL, ARM_SUBGROUP, TORSO_ARM_IDX
     )
 
-    path = plan_arm_free(current, BOTTLE_PREGRASP_FULL, cloud, "s4 free→pregrasp")
+    path = plan_arm_free(planner, current, BOTTLE_PREGRASP_FULL, "s4 free→pregrasp")
     add(path, "s4 approach")
     current = path[-1]
 
-    path = plan_arm_line(current, BOTTLE_GRASP_FULL, pp3, gp3, cloud, "s4 approach")
+    path = plan_arm_line(planner, current, BOTTLE_GRASP_FULL, pp3, gp3, "s4 approach")
     add(path, "s4 approach line")
     current = path[-1]
 
@@ -612,31 +635,31 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     )
     bottle_tf = capture_local_transform(env, gripper_link, bottle_id)
 
-    path = plan_arm_line(current, BOTTLE_PREGRASP_FULL, gp3, pp3, cloud, "s4 lift")
+    path = plan_arm_line(planner, current, BOTTLE_PREGRASP_FULL, gp3, pp3, "s4 lift")
     add(path, "s4 lift", bottle_id, bottle_tf)
     current = path[-1]
 
     # ── Stage 5: nav to coffee table ──
     print("\n── stage 5: nav → coffee table ──")
-    path = plan_base(current, BASE_NEAR_COFFEE, cloud, "s5 nav→coffee")
+    path = plan_base(planner, current, BASE_NEAR_COFFEE, "s5 nav→coffee")
     add(path, "s5 nav→coffee", bottle_id, bottle_tf)
     current = path[-1]
 
     # ── Stage 6: place bottle on coffee table ──
     print("\n── stage 6: place bottle on coffee table ──")
-    gp4, pp4 = grasp_line_endpoints(
-        BOTTLE_MESH_PLACE + [0, 0, BOTTLE_GRASP_Z], BOTTLE_APPROACH
+    gp4, pp4 = fk_line_endpoints(
+        BOTTLE_PLACE_FULL, BOTTLE_PREPLACE_FULL, ARM_SUBGROUP, TORSO_ARM_IDX
     )
 
-    path = plan_arm_free(current, BOTTLE_PREPLACE_FULL, cloud, "s6 free→preplace")
+    path = plan_arm_free(planner, current, BOTTLE_PREPLACE_FULL, "s6 free→preplace")
     add(path, "s6 carry", bottle_id, bottle_tf)
     current = path[-1]
 
-    path = plan_arm_line(current, BOTTLE_PLACE_FULL, pp4, gp4, cloud, "s6 lower")
+    path = plan_arm_line(planner, current, BOTTLE_PLACE_FULL, pp4, gp4, "s6 lower")
     add(path, "s6 lower", bottle_id, bottle_tf)
     current = path[-1]
 
-    path = plan_arm_line(current, BOTTLE_PREPLACE_FULL, gp4, pp4, cloud, "s6 retreat")
+    path = plan_arm_line(planner, current, BOTTLE_PREPLACE_FULL, gp4, pp4, "s6 retreat")
     add(path, "s6 retreat")
     current = path[-1]
 
