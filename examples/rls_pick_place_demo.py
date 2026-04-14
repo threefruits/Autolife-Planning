@@ -9,7 +9,8 @@ A single end-to-end showcase of the project's planning stack:
 * **CasADi constraints** — the under-table pick pins the ankle +
   knee via a compiled holonomic constraint while the arm plans on
   the remaining 19 DOF; every pregrasp→grasp sweep uses a
-  2-equation straight-line manifold.
+  2-equation straight-line manifold; the kitchen-counter carry
+  phase uses a horizontal-hold orientation constraint.
 * **Collision avoidance** — every planner gets the full 151 k-point
   cloud built from all seven ``pcd/*.ply`` scans.
 * **Hardcoded grasp configs** — each grasp/pregrasp/place pose is a
@@ -21,10 +22,14 @@ Storyline:
     1b. pick apple from under the table  (autolife_body, 21 DOF + leg pin)
     1c. stand up  (autolife_height)
     2.  place apple on table top  (autolife_torso_left_arm, 9 DOF)
-    3.  navigate to sofa  (autolife_base, 3 DOF)
-    4.  pick bottle from sofa  (autolife_torso_left_arm)
-    5.  navigate to coffee table  (autolife_base)
-    6.  place bottle on coffee table  (autolife_torso_left_arm)
+    3.  navigate to kitchen counter  (autolife_base)
+    4.  pick bowl from kitchen counter  (autolife_torso_left_arm)
+    5.  navigate to coffee table  (autolife_base, bowl held horizontally)
+    6.  place bowl on coffee table  (autolife_torso_left_arm)
+    7.  navigate to sofa  (autolife_base, 3 DOF)
+    8.  pick bottle from sofa  (autolife_torso_left_arm)
+    9.  navigate to coffee table  (autolife_base)
+    10. place bottle on coffee table  (autolife_torso_left_arm)
 
 Usage::
 
@@ -58,6 +63,10 @@ ARM_SUBGROUP = "autolife_torso_left_arm"  # 9 DOF: waist + left arm
 BODY_SUBGROUP = "autolife_body"  # 21 DOF: legs + waist + arms + neck
 
 TORSO_ARM_IDX = np.array([5, 6, 7, 8, 9, 10, 11, 12, 13])
+RARM_SUBGROUP = "autolife_torso_right_arm"  # 9 DOF: waist + right arm
+TORSO_RARM_IDX = np.array([5, 6, 17, 18, 19, 20, 21, 22, 23])
+RIGHT_GRIPPER_LINK = "Link_Right_Gripper"
+FINGER_MIDPOINT_IN_RIGHT_GRIPPER = np.array([0.031, -0.064, 0.0])
 HEIGHT_IDX = np.array([3, 4, 5])
 BODY_IDX = np.array(
     [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
@@ -84,6 +93,7 @@ SCENE_PROPS = [
 # ── Robot base poses ──────────────────────────────────────────────
 BASE_SQUAT_EAST = np.array([-1.10, 1.67, np.pi])  # for squat + under-table pick
 BASE_PLACE_EAST = np.array([-1.30, 1.67, np.pi])  # for placing on the table top
+BASE_NEAR_KITCHEN = np.array([-3.80, -2.40, -np.pi / 2])  # beside kitchen counter
 BASE_NEAR_SOFA = np.array([2.00, 1.30, -np.pi / 2])
 BASE_NEAR_COFFEE = np.array([3.60, 1.30, -np.pi / 2])
 STANDING_STANCE = np.array([0.0, 0.0, 0.0])
@@ -98,6 +108,10 @@ APPLE_MESH_INIT = np.array([-1.50, 1.67, 0.15])  # on the floor near the table
 APPLE_MESH_PLACE = np.array([-2.05, 1.67, 0.75])
 APPLE_APPROACH = np.array([-1.0, 0.0, 0.0])
 APPLE_GRASP_Z = 0.13
+
+BOWL_MESH_INIT = np.array([-4.00, -2.93, 0.89])  # on kitchen counter
+BOWL_MESH_PLACE = np.array([3.55, 0.45, 0.58])  # on coffee table
+BOWL_APPROACH = np.array([0.0, -1.0, 0.0])
 
 BOTTLE_MESH_INIT = np.array([1.95, 0.30, 0.69])
 BOTTLE_MESH_PLACE = np.array([3.60, 0.30, 0.58])
@@ -146,6 +160,38 @@ BOTTLE_PREPLACE_FULL = np.array(
     [3.6, 1.3, -1.5708, 0.0, 0.0, 0.90982, -1.23524,
      -0.56996, -0.89735, -0.65942, 1.53732, 0.04446,
      -0.26316, 0.08853] + _NH)
+# Bowl on kitchen counter – right arm, base at [-3.8, -2.4, -pi/2].
+# All four configs satisfy the FULL right-gripper rotation lock R = I
+# (X axis world-X, Y axis world-Y, Z axis world-Z = palm up, fingers
+# pointing south = forward).  Connected via line-constraint manifold.
+BOWL_GRASP_FULL = np.array([
+    -3.8, -2.4, -1.5708, 0.0, 0.0, -0.03787, -0.00501,
+    0.7, -0.14, -0.09, 2.31, 0.04, -0.4, 0.0,
+    0.0, 0.0, 0.0,
+    -2.31808, 2.86290, 0.96723, -0.67625, 2.17094, 0.28252, -1.08729,
+])
+BOWL_PREGRASP_FULL = np.array([
+    -3.8, -2.4, -1.5708, 0.0, 0.0, -0.30794, -0.21616,
+    0.7, -0.14, -0.09, 2.31, 0.04, -0.4, 0.0,
+    0.0, 0.0, 0.0,
+    -2.45845, 2.92047, 0.84476, -0.85045, 2.12556, 0.38272, -1.06612,
+])
+# Bowl placement on coffee table – right arm, base at [3.6, 1.3, -pi/2].
+BOWL_PLACE_FULL = np.array([
+    3.6, 1.3, -1.5708, 0.0, 0.0, 0.96932, 1.09465,
+    0.7, -0.14, -0.09, 2.31, 0.04, -0.4, 0.0,
+    0.0, 0.0, 0.0,
+    1.18665, 0.62293, 1.34621, -1.49030, -0.73090, -0.80767, -0.36327,
+])
+BOWL_PREPLACE_FULL = np.array([
+    3.6, 1.3, -1.5708, 0.0, 0.0, 0.93529, 0.99476,
+    0.7, -0.14, -0.09, 2.31, 0.04, -0.4, 0.0,
+    0.0, 0.0, 0.0,
+    0.94470, 0.32021, 1.51090, -1.68589, -0.63056, -0.84806, -0.47318,
+])
+
+# Right-gripper rotation lock target: identity (palm up, fingers south).
+BOWL_HOLD_ROT = np.eye(3)
 # fmt: on
 
 ARM_FREE_TIME = 4.0
@@ -199,7 +245,7 @@ def _project_and_clamp(ctx, residual, q, lo, hi, iters=5):
     return q
 
 
-def make_line_constraint(ctx, p_from, p_to, name):
+def make_line_constraint(ctx, p_from, p_to, name, grip=GRIPPER_LINK):
     p_from, p_to = np.asarray(p_from, float), np.asarray(p_to, float)
     d = p_to - p_from
     d /= float(np.linalg.norm(d))
@@ -207,7 +253,7 @@ def make_line_constraint(ctx, p_from, p_to, name):
     u = np.cross(d, seed)
     u /= float(np.linalg.norm(u))
     v = np.cross(d, u)
-    gripper = ctx.link_translation(GRIPPER_LINK)
+    gripper = ctx.link_translation(grip)
     diff = gripper - ca.DM(p_from.tolist())
     res = ca.vertcat(ca.dot(diff, ca.DM(u.tolist())), ca.dot(diff, ca.DM(v.tolist())))
     return Constraint(residual=res, q_sym=ctx.q, name=name)
@@ -218,6 +264,16 @@ def make_leg_pin(ctx, ankle, knee, name):
         ctx.q[BODY_ANKLE_IDX] - ca.DM(float(ankle)),
         ctx.q[BODY_KNEE_IDX] - ca.DM(float(knee)),
     )
+    return Constraint(residual=res, q_sym=ctx.q, name=name)
+
+
+def make_horizontal_hold(ctx, name, grip=GRIPPER_LINK):
+    """Constrain the gripper Z-axis to be vertical (object stays level).
+
+    Returns a 2-equation constraint:  R_gripper[0,2] = 0, R_gripper[1,2] = 0.
+    """
+    R = ctx.link_rotation(grip)
+    res = ca.vertcat(R[0, 2], R[1, 2])
     return Constraint(residual=res, q_sym=ctx.q, name=name)
 
 
@@ -244,7 +300,9 @@ def grasp_line_endpoints(finger_xyz, approach, pregrasp_offset=PREGRASP_OFFSET):
     return grasp_pos, pregrasp_pos
 
 
-def fk_line_endpoints(grasp_full, pregrasp_full, subgroup, active_idx):
+def fk_line_endpoints(
+    grasp_full, pregrasp_full, subgroup, active_idx, grip=GRIPPER_LINK
+):
     """Compute the gripper link positions from the PLANNER's own FK.
 
     The IK solver and SymbolicContext use different URDFs, so their FK
@@ -253,10 +311,8 @@ def fk_line_endpoints(grasp_full, pregrasp_full, subgroup, active_idx):
     at these positions by construction.
     """
     ctx = SymbolicContext(subgroup, base_config=grasp_full)
-    gp = np.asarray(ctx.evaluate_link_pose(GRIPPER_LINK, grasp_full[active_idx]))[:3, 3]
-    pp = np.asarray(ctx.evaluate_link_pose(GRIPPER_LINK, pregrasp_full[active_idx]))[
-        :3, 3
-    ]
+    gp = np.asarray(ctx.evaluate_link_pose(grip, grasp_full[active_idx]))[:3, 3]
+    pp = np.asarray(ctx.evaluate_link_pose(grip, pregrasp_full[active_idx]))[:3, 3]
     return gp, pp
 
 
@@ -310,6 +366,27 @@ def plan_arm_line(planner, current_full, goal_full, p_from, p_to, label):
     return _plan(planner, start, goal, label, ARM_LINE_TIME)
 
 
+def plan_rarm_free(planner, current_full, goal_full, label):
+    _use(planner, RARM_SUBGROUP, current_full)
+    return _plan(
+        planner, current_full[TORSO_RARM_IDX], goal_full[TORSO_RARM_IDX], label
+    )
+
+
+def plan_rarm_line(planner, current_full, goal_full, p_from, p_to, label):
+    ctx = SymbolicContext(RARM_SUBGROUP, base_config=current_full)
+    c = make_line_constraint(
+        ctx, p_from, p_to, f"line_{_sanitize(label)}", grip=RIGHT_GRIPPER_LINK
+    )
+    _use(planner, RARM_SUBGROUP, current_full, [c])
+    lo, hi = _bounds(planner)
+    start = _project_and_clamp(
+        ctx, c.residual, current_full[TORSO_RARM_IDX].copy(), lo, hi
+    )
+    goal = _project_and_clamp(ctx, c.residual, goal_full[TORSO_RARM_IDX].copy(), lo, hi)
+    return _plan(planner, start, goal, label, ARM_LINE_TIME)
+
+
 def plan_body_free(planner, current_full, goal_full, label):
     ctx = SymbolicContext(BODY_SUBGROUP, base_config=current_full)
     lp = make_leg_pin(
@@ -349,6 +426,134 @@ def plan_body_line(planner, current_full, goal_full, p_from, p_to, label):
     return _plan(planner, start, goal, label, ARM_LINE_TIME)
 
 
+def make_grip_rotation_lock(ctx, R_target, name, grip):
+    """3-equation residual locking the gripper rotation to R_target (full SO(3))."""
+    R = ctx.link_rotation(grip)
+    R_t = ca.DM(np.asarray(R_target, float).tolist())
+    M = R.T @ R_t - ca.DM_eye(3)
+    res = ca.vertcat(M[2, 1] - M[1, 2], M[0, 2] - M[2, 0], M[1, 0] - M[0, 1])
+    return Constraint(residual=res, q_sym=ctx.q, name=name)
+
+
+def plan_body_locked_free(planner, current_full, goal_full, R_target, label, grip):
+    """Body-subgroup free-motion plan: leg pin (legs at zero) + right-gripper
+    rotation lock.  Left arm + neck + waist + arms are all active (the user-
+    requested 'left arm constraint removed, leg constraint kept' setup).
+    """
+    ctx = SymbolicContext(BODY_SUBGROUP, base_config=current_full)
+    R = ctx.link_rotation(grip)
+    R_t = ca.DM(np.asarray(R_target, float).tolist())
+    M = R.T @ R_t - ca.DM_eye(3)
+    rot_res = ca.vertcat(M[2, 1] - M[1, 2], M[0, 2] - M[2, 0], M[1, 0] - M[0, 1])
+    leg_res = ca.vertcat(ctx.q[BODY_ANKLE_IDX], ctx.q[BODY_KNEE_IDX])
+    res = ca.vertcat(rot_res, leg_res)
+    c = Constraint(residual=res, q_sym=ctx.q, name=f"bodylock_{_sanitize(label)}")
+    _use(planner, BODY_SUBGROUP, current_full, [c])
+    lo, hi = _bounds(planner)
+    start = _project_and_clamp(ctx, c.residual, current_full[BODY_IDX].copy(), lo, hi)
+    goal = _project_and_clamp(ctx, c.residual, goal_full[BODY_IDX].copy(), lo, hi)
+    return _plan(planner, start, goal, label, ARM_LINE_TIME)
+
+
+def plan_body_locked_line_direct(
+    planner, current_full, goal_full, R_target, label, grip, steps=20
+):
+    """Construct a line motion path during holding by direct interpolation.
+
+    Sampling-based planners struggle with the 7-eq constraint manifold (line
+    + rotation lock + leg pin) on 21 DOF.  Since the line motion is a simple
+    12 cm Cartesian translation between two manifold-connected configs, we
+    construct the path by projecting interpolated targets directly.
+    """
+    ctx = SymbolicContext(BODY_SUBGROUP, base_config=current_full)
+    gp = ctx.link_translation(grip)
+    R = ctx.link_rotation(grip)
+    R_t = ca.DM(np.asarray(R_target, float).tolist())
+    M = R.T @ R_t - ca.DM_eye(3)
+    rot_res = ca.vertcat(M[2, 1] - M[1, 2], M[0, 2] - M[2, 0], M[1, 0] - M[0, 1])
+    leg_res = ca.vertcat(ctx.q[BODY_ANKLE_IDX], ctx.q[BODY_KNEE_IDX])
+
+    planner.set_subgroup(BODY_SUBGROUP, base_config=current_full)
+    lo = np.array(planner._planner.lower_bounds())
+    hi = np.array(planner._planner.upper_bounds())
+
+    start_pos = ctx.evaluate_link_pose(grip, current_full[BODY_IDX])[:3, 3]
+    end_pos = ctx.evaluate_link_pose(grip, goal_full[BODY_IDX])[:3, 3]
+
+    path_active = [current_full[BODY_IDX].copy()]
+    q = current_full[BODY_IDX].copy()
+    for s in range(1, steps + 1):
+        alpha = s / steps
+        target_pos = start_pos * (1 - alpha) + end_pos * alpha
+        pos_res = gp - ca.DM(target_pos.tolist())
+        res = ca.vertcat(pos_res, rot_res, leg_res)
+        for _ in range(20):
+            q = ctx.project(q, res, max_iters=200)
+            q = np.clip(q, lo + 1e-5, hi - 1e-5)
+        if not planner._planner.validate(q):
+            raise RuntimeError(f"{label}: collision at step {s}/{steps}")
+        path_active.append(q.copy())
+    full_path = np.tile(current_full, (len(path_active), 1))
+    full_path[:, BODY_IDX] = np.asarray(path_active)
+    print(f"  [{label}] direct: {len(path_active)} wp")
+    return full_path
+
+
+def plan_arm_free_horizontal(
+    planner,
+    current_full,
+    goal_full,
+    label,
+    subgroup=ARM_SUBGROUP,
+    idx=TORSO_ARM_IDX,
+    grip=GRIPPER_LINK,
+):
+    """Free arm plan with a horizontal-hold (level gripper) constraint."""
+    ctx = SymbolicContext(subgroup, base_config=current_full)
+    c = make_horizontal_hold(ctx, f"hhold_{_sanitize(label)}", grip)
+    _use(planner, subgroup, current_full, [c])
+    lo, hi = _bounds(planner)
+    start = _project_and_clamp(ctx, c.residual, current_full[idx].copy(), lo, hi)
+    goal = _project_and_clamp(ctx, c.residual, goal_full[idx].copy(), lo, hi)
+    return _plan(planner, start, goal, label)
+
+
+def plan_arm_line_horizontal(
+    planner,
+    current_full,
+    goal_full,
+    p_from,
+    p_to,
+    label,
+    subgroup=ARM_SUBGROUP,
+    idx=TORSO_ARM_IDX,
+    grip=GRIPPER_LINK,
+):
+    """Line approach/retreat combined with horizontal-hold constraint (4 eq)."""
+    ctx = SymbolicContext(subgroup, base_config=current_full)
+    p_from, p_to = np.asarray(p_from, float), np.asarray(p_to, float)
+    d = p_to - p_from
+    d /= float(np.linalg.norm(d))
+    seed = np.array([1, 0, 0.0]) if abs(d[0]) < 0.9 else np.array([0, 1, 0.0])
+    u = np.cross(d, seed)
+    u /= float(np.linalg.norm(u))
+    v = np.cross(d, u)
+    gripper = ctx.link_translation(grip)
+    diff = gripper - ca.DM(p_from.tolist())
+    line_res = ca.vertcat(
+        ca.dot(diff, ca.DM(u.tolist())), ca.dot(diff, ca.DM(v.tolist()))
+    )
+    R = ctx.link_rotation(grip)
+    hhold_res = ca.vertcat(R[0, 2], R[1, 2])
+    combined = ca.vertcat(line_res, hhold_res)
+    c = Constraint(residual=combined, q_sym=ctx.q, name=f"linehhold_{_sanitize(label)}")
+    _use(planner, subgroup, current_full, [c])
+    lo, hi = _bounds(planner)
+    start = _project_and_clamp(ctx, c.residual, current_full[idx].copy(), lo, hi)
+    goal = _project_and_clamp(ctx, c.residual, goal_full[idx].copy(), lo, hi)
+    return _plan(planner, start, goal, label, ARM_LINE_TIME)
+
+
 def plan_base(planner, current_full, goal_base, label):
     _use(planner, BASE_SUBGROUP, current_full)
     return _plan(
@@ -375,6 +580,7 @@ class Segment:
     path: np.ndarray
     attach_body_id: int | None
     attach_local_tf: np.ndarray | None
+    attach_link_idx: int | None
     banner: str
 
 
@@ -446,7 +652,7 @@ def apply_attachment(env, link_idx, body_id, local_tf):
     c.resetBasePositionAndOrientation(body_id, wp.tolist(), [x, y, z, w])
 
 
-def play_segments(env, segments, gripper_link_idx, fps=60.0):
+def play_segments(env, segments, fps=60.0):
     c = env.sim.client
     dt = 1.0 / fps
     frames = [
@@ -461,9 +667,13 @@ def play_segments(env, segments, gripper_link_idx, fps=60.0):
             si, ri = frames[idx]
             seg = segments[si]
             env.set_configuration(seg.path[ri])
-            if seg.attach_body_id is not None and seg.attach_local_tf is not None:
+            if (
+                seg.attach_body_id is not None
+                and seg.attach_local_tf is not None
+                and seg.attach_link_idx is not None
+            ):
                 apply_attachment(
-                    env, gripper_link_idx, seg.attach_body_id, seg.attach_local_tf
+                    env, seg.attach_link_idx, seg.attach_body_id, seg.attach_local_tf
                 )
             if si != last_si:
                 print(f"[{si}] {seg.banner}")
@@ -526,17 +736,19 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     env.set_configuration(current)
 
     apple_id = place_graspable(env, "apple", APPLE_MESH_INIT)
+    bowl_id = place_graspable(env, "bowl", BOWL_MESH_INIT)
     bottle_id = place_graspable(env, "bottle", BOTTLE_MESH_INIT)
     gripper_link = find_link_index(env, GRIPPER_LINK)
     client = env.sim.client
     segs: list[Segment] = []
 
-    def add(path, label, attach_id=None, attach_tf=None):
+    def add(path, label, attach_id=None, attach_tf=None, attach_link=None):
         segs.append(
             Segment(
                 path=path,
                 attach_body_id=attach_id,
                 attach_local_tf=attach_tf,
+                attach_link_idx=attach_link,
                 banner=label,
             )
         )
@@ -574,7 +786,7 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     apple_tf = capture_local_transform(env, gripper_link, apple_id)
 
     path = plan_body_line(planner, current, APPLE_PREGRASP_FULL, gp, pp, "s1b lift")
-    add(path, "s1b lift", apple_id, apple_tf)
+    add(path, "s1b lift", apple_id, apple_tf, gripper_link)
     current = path[-1]
 
     # ── Stage 1c: stand up (body + waist_pitch pin, apple attached) ──
@@ -582,13 +794,13 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     stand_goal = current.copy()
     stand_goal[3:6] = STANDING_STANCE
     path = plan_body_squat(planner, current, stand_goal, "s1c stand")
-    add(path, "s1c stand", apple_id, apple_tf)
+    add(path, "s1c stand", apple_id, apple_tf, gripper_link)
     current = path[-1]
 
     # ── Nav closer to table for placement ──
     print("\n── nav → table placement position ──")
     path = plan_base(planner, current, BASE_PLACE_EAST, "nav→place pos")
-    add(path, "nav→place pos", apple_id, apple_tf)
+    add(path, "nav→place pos", apple_id, apple_tf, gripper_link)
     current = path[-1]
 
     # ── Stage 2: place apple on table (torso+arm) ──
@@ -598,35 +810,146 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     )
 
     path = plan_arm_free(planner, current, APPLE_PREPLACE_FULL, "s2 free→preplace")
-    add(path, "s2 carry", apple_id, apple_tf)
+    add(path, "s2 carry", apple_id, apple_tf, gripper_link)
     current = path[-1]
 
     path = plan_arm_line(planner, current, APPLE_PLACE_FULL, pp2, gp2, "s2 lower")
-    add(path, "s2 lower", apple_id, apple_tf)
+    add(path, "s2 lower", apple_id, apple_tf, gripper_link)
     current = path[-1]
 
     path = plan_arm_line(planner, current, APPLE_PREPLACE_FULL, gp2, pp2, "s2 retreat")
     add(path, "s2 retreat")
     current = path[-1]
 
-    # ── Stage 3: nav to sofa ──
-    print("\n── stage 3: nav → sofa ──")
-    path = plan_base(planner, current, BASE_NEAR_SOFA, "s3 nav→sofa")
-    add(path, "s3 nav→sofa")
+    # ── Retract arm to home before navigating to kitchen ──
+    print("\n── retract arm to home ──")
+    retract_goal = current.copy()
+    retract_goal[TORSO_ARM_IDX] = HOME_JOINTS[TORSO_ARM_IDX]
+    retract_goal[6] = 0.0  # zero waist yaw
+    path = plan_arm_free(planner, current, retract_goal, "retract arm→home")
+    add(path, "retract arm")
     current = path[-1]
 
-    # ── Stage 4: pick bottle from sofa ──
-    print("\n── stage 4: pick bottle from sofa ──")
+    # ── Stage 3: nav to kitchen counter ──
+    print("\n── stage 3: nav → kitchen counter ──")
+    path = plan_base(planner, current, BASE_NEAR_KITCHEN, "s3 nav→kitchen")
+    add(path, "s3 nav→kitchen")
+    current = path[-1]
+
+    # ── Stage 4: pick bowl from kitchen counter (right arm) ──
+    # Approach is unconstrained (no rotation lock yet — bowl not held).
+    # Lift activates the holding constraints: full SO(3) gripper rotation
+    # lock + leg pin (legs locked at standing) + left arm free (body
+    # subgroup makes both arms active in the plan).
+    print("\n── stage 4: pick bowl from kitchen counter (right arm) ──")
+    r_gripper_link = find_link_index(env, RIGHT_GRIPPER_LINK)
     gp3, pp3 = fk_line_endpoints(
-        BOTTLE_GRASP_FULL, BOTTLE_PREGRASP_FULL, ARM_SUBGROUP, TORSO_ARM_IDX
+        BOWL_GRASP_FULL,
+        BOWL_PREGRASP_FULL,
+        RARM_SUBGROUP,
+        TORSO_RARM_IDX,
+        grip=RIGHT_GRIPPER_LINK,
     )
 
-    path = plan_arm_free(planner, current, BOTTLE_PREGRASP_FULL, "s4 free→pregrasp")
+    path = plan_rarm_free(planner, current, BOWL_PREGRASP_FULL, "s4 free→pregrasp")
     add(path, "s4 approach")
     current = path[-1]
 
-    path = plan_arm_line(planner, current, BOTTLE_GRASP_FULL, pp3, gp3, "s4 approach")
+    path = plan_rarm_line(planner, current, BOWL_GRASP_FULL, pp3, gp3, "s4 approach")
     add(path, "s4 approach line")
+    current = path[-1]
+
+    # Capture bowl attachment (right gripper)
+    env.set_configuration(BOWL_GRASP_FULL)
+    client.resetBasePositionAndOrientation(
+        bowl_id, BOWL_MESH_INIT.tolist(), [0, 0, 0, 1]
+    )
+    bowl_tf = capture_local_transform(env, r_gripper_link, bowl_id)
+
+    # Lift with rotation lock + leg pin (left arm free)
+    path = plan_body_locked_line_direct(
+        planner,
+        current,
+        BOWL_PREGRASP_FULL,
+        BOWL_HOLD_ROT,
+        "s4 lift",
+        grip=RIGHT_GRIPPER_LINK,
+    )
+    add(path, "s4 lift", bowl_id, bowl_tf, r_gripper_link)
+    current = path[-1]
+
+    # ── Stage 5: nav to coffee table (bowl held, rotation locked) ──
+    print("\n── stage 5: nav → coffee table (bowl) ──")
+    path = plan_base(planner, current, BASE_NEAR_COFFEE, "s5 nav→coffee")
+    add(path, "s5 nav→coffee", bowl_id, bowl_tf, r_gripper_link)
+    current = path[-1]
+
+    # ── Stage 6: place bowl on coffee table (rotation locked, leg pin) ──
+    print("\n── stage 6: place bowl on coffee table ──")
+    gp4, pp4 = fk_line_endpoints(
+        BOWL_PLACE_FULL,
+        BOWL_PREPLACE_FULL,
+        RARM_SUBGROUP,
+        TORSO_RARM_IDX,
+        grip=RIGHT_GRIPPER_LINK,
+    )
+
+    # Carry to preplace: free body motion with rotation lock + leg pin.
+    path = plan_body_locked_free(
+        planner,
+        current,
+        BOWL_PREPLACE_FULL,
+        BOWL_HOLD_ROT,
+        "s6 carry",
+        grip=RIGHT_GRIPPER_LINK,
+    )
+    add(path, "s6 carry", bowl_id, bowl_tf, r_gripper_link)
+    current = path[-1]
+
+    # Lower to place: line motion via direct interpolation.
+    path = plan_body_locked_line_direct(
+        planner,
+        current,
+        BOWL_PLACE_FULL,
+        BOWL_HOLD_ROT,
+        "s6 lower",
+        grip=RIGHT_GRIPPER_LINK,
+    )
+    add(path, "s6 lower", bowl_id, bowl_tf, r_gripper_link)
+    current = path[-1]
+
+    # Retreat: bowl released, rotation lock no longer needed — regular line.
+    path = plan_rarm_line(planner, current, BOWL_PREPLACE_FULL, gp4, pp4, "s6 retreat")
+    add(path, "s6 retreat")
+    current = path[-1]
+
+    # ── Retract right arm to home before navigating to sofa ──
+    print("\n── retract arm to home ──")
+    retract_goal = current.copy()
+    retract_goal[TORSO_RARM_IDX] = HOME_JOINTS[TORSO_RARM_IDX]
+    retract_goal[6] = 0.0  # zero waist yaw
+    path = plan_rarm_free(planner, current, retract_goal, "retract arm")
+    add(path, "retract arm")
+    current = path[-1]
+
+    # ── Stage 7: nav to sofa ──
+    print("\n── stage 7: nav → sofa ──")
+    path = plan_base(planner, current, BASE_NEAR_SOFA, "s7 nav→sofa")
+    add(path, "s7 nav→sofa")
+    current = path[-1]
+
+    # ── Stage 8: pick bottle from sofa ──
+    print("\n── stage 8: pick bottle from sofa ──")
+    gp5, pp5 = fk_line_endpoints(
+        BOTTLE_GRASP_FULL, BOTTLE_PREGRASP_FULL, ARM_SUBGROUP, TORSO_ARM_IDX
+    )
+
+    path = plan_arm_free(planner, current, BOTTLE_PREGRASP_FULL, "s8 free→pregrasp")
+    add(path, "s8 approach")
+    current = path[-1]
+
+    path = plan_arm_line(planner, current, BOTTLE_GRASP_FULL, pp5, gp5, "s8 approach")
+    add(path, "s8 approach line")
     current = path[-1]
 
     env.set_configuration(BOTTLE_GRASP_FULL)
@@ -635,38 +958,43 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     )
     bottle_tf = capture_local_transform(env, gripper_link, bottle_id)
 
-    path = plan_arm_line(planner, current, BOTTLE_PREGRASP_FULL, gp3, pp3, "s4 lift")
-    add(path, "s4 lift", bottle_id, bottle_tf)
+    path = plan_arm_line(planner, current, BOTTLE_PREGRASP_FULL, gp5, pp5, "s8 lift")
+    add(path, "s8 lift", bottle_id, bottle_tf, gripper_link)
     current = path[-1]
 
-    # ── Stage 5: nav to coffee table ──
-    print("\n── stage 5: nav → coffee table ──")
-    path = plan_base(planner, current, BASE_NEAR_COFFEE, "s5 nav→coffee")
-    add(path, "s5 nav→coffee", bottle_id, bottle_tf)
+    # ── Stage 9: nav to coffee table ──
+    print("\n── stage 9: nav → coffee table ──")
+    path = plan_base(planner, current, BASE_NEAR_COFFEE, "s9 nav→coffee")
+    add(path, "s9 nav→coffee", bottle_id, bottle_tf, gripper_link)
     current = path[-1]
 
-    # ── Stage 6: place bottle on coffee table ──
-    print("\n── stage 6: place bottle on coffee table ──")
-    gp4, pp4 = fk_line_endpoints(
+    # ── Stage 10: place bottle on coffee table ──
+    print("\n── stage 10: place bottle on coffee table ──")
+    gp6, pp6 = fk_line_endpoints(
         BOTTLE_PLACE_FULL, BOTTLE_PREPLACE_FULL, ARM_SUBGROUP, TORSO_ARM_IDX
     )
 
-    path = plan_arm_free(planner, current, BOTTLE_PREPLACE_FULL, "s6 free→preplace")
-    add(path, "s6 carry", bottle_id, bottle_tf)
+    path = plan_arm_free(planner, current, BOTTLE_PREPLACE_FULL, "s10 free→preplace")
+    add(path, "s10 carry", bottle_id, bottle_tf, gripper_link)
     current = path[-1]
 
-    path = plan_arm_line(planner, current, BOTTLE_PLACE_FULL, pp4, gp4, "s6 lower")
-    add(path, "s6 lower", bottle_id, bottle_tf)
+    path = plan_arm_line(planner, current, BOTTLE_PLACE_FULL, pp6, gp6, "s10 lower")
+    add(path, "s10 lower", bottle_id, bottle_tf, gripper_link)
     current = path[-1]
 
-    path = plan_arm_line(planner, current, BOTTLE_PREPLACE_FULL, gp4, pp4, "s6 retreat")
-    add(path, "s6 retreat")
+    path = plan_arm_line(
+        planner, current, BOTTLE_PREPLACE_FULL, gp6, pp6, "s10 retreat"
+    )
+    add(path, "s10 retreat")
     current = path[-1]
 
     # Reset for playback
     env.set_configuration(segs[0].path[0])
     client.resetBasePositionAndOrientation(
         apple_id, APPLE_MESH_INIT.tolist(), [0, 0, 0, 1]
+    )
+    client.resetBasePositionAndOrientation(
+        bowl_id, BOWL_MESH_INIT.tolist(), [0, 0, 0, 1]
     )
     client.resetBasePositionAndOrientation(
         bottle_id, BOTTLE_MESH_INIT.tolist(), [0, 0, 0, 1]
@@ -676,7 +1004,7 @@ def main(pcd_stride: int = 1, visualize: bool = True) -> None:
     print(f"\n── ready: {total} total frames across {len(segs)} segments ──")
     if not visualize:
         return
-    play_segments(env, segs, gripper_link)
+    play_segments(env, segs)
 
 
 if __name__ == "__main__":
