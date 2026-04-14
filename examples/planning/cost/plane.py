@@ -9,7 +9,7 @@ whenever they're cheaper than the alternative.
 
 A translucent blue plate is drawn at the target height.
 
-    pixi run python examples/cost_planning/plane.py
+    pixi run python examples/planning/cost/plane.py
 """
 
 import casadi as ca

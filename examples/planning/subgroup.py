@@ -5,7 +5,7 @@ can be planned around any 24-DOF base configuration the caller passes
 in — no stance is baked into the planner name.  The three stances
 below are *example data*, not part of the planning API.
 
-    pixi run python examples/subgroup_planning_example.py
+    pixi run python examples/planning/subgroup.py
 """
 
 import numpy as np

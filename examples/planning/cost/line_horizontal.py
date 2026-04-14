@@ -11,7 +11,7 @@ shorter solution.
 
 A bold green cylinder marks the rail.
 
-    pixi run python examples/cost_planning/line_horizontal.py
+    pixi run python examples/planning/cost/line_horizontal.py
 """
 
 import casadi as ca

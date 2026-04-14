@@ -12,7 +12,7 @@ RGB coordinate frames are drawn at the start and goal gripper
 positions — they look identical because the preferred rotation is
 locked — and a faint magenta rod connects them.
 
-    pixi run python examples/cost_planning/orientation_lock.py
+    pixi run python examples/planning/cost/orientation_lock.py
 """
 
 import casadi as ca

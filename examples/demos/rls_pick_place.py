@@ -33,7 +33,7 @@ Storyline:
 
 Usage::
 
-    pixi run python examples/rls_pick_place_demo.py
+    pixi run python examples/demos/rls_pick_place.py
 """
 
 from __future__ import annotations

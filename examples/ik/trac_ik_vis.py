@@ -1,15 +1,15 @@
-"""Pink IK stress test with PyBullet visualization.
+"""TRAC-IK stress test with PyBullet visualization.
 
-Same target poses as trac_ik_example_vis.py but using the Pink
-constrained backend — with CoM stability and chest camera
-stabilization.
+Same target poses as constrained_ik_example_vis.py but using the
+unconstrained TRAC-IK backend — no CoM stability, no camera
+stabilization, no collision avoidance.
 
 Controls:
     n — advance to next target
     q — quit
 
 Usage:
-    python examples/constrained_ik_example_vis.py
+    python examples/ik/trac_ik_vis.py
 """
 
 import time
@@ -26,8 +26,7 @@ from autolife_planning.autolife import (
 )
 from autolife_planning.envs.pybullet_env import PyBulletEnv
 from autolife_planning.kinematics import create_ik_solver
-from autolife_planning.kinematics.pink_ik_solver import PinkIKSolver
-from autolife_planning.types import PinkIKConfig, SE3Pose
+from autolife_planning.types import IKConfig, SE3Pose, SolveType
 
 G = JOINT_GROUPS
 SEED = np.concatenate(
@@ -126,23 +125,15 @@ def build_targets(home_pose):
 
 
 def main():
-    print("Pink IK Stress Test — PyBullet Visualization")
+    print("TRAC-IK Stress Test — PyBullet Visualization")
     print("=" * 60)
 
     env = PyBulletEnv(autolife_robot_config, visualize=True)
     ee_link = CHAIN_CONFIGS["whole_body_left"].ee_link
     ee_idx = get_ee_link_index(env, ee_link)
 
-    # CoM stability + chest camera stabilization
-    config = PinkIKConfig(
-        lm_damping=1e-3,
-        com_cost=0.1,
-        camera_frame="Link_Waist_Yaw_to_Shoulder_Inner",
-        camera_cost=0.1,
-        max_iterations=200,
-    )
-    solver = create_ik_solver("whole_body", side="left", backend="pink", config=config)
-    assert isinstance(solver, PinkIKSolver)
+    config = IKConfig(solve_type=SolveType.DISTANCE, max_attempts=20)
+    solver = create_ik_solver("whole_body", side="left", config=config)
 
     home_pose = solver.fk(SEED)
     targets = build_targets(home_pose)
@@ -163,20 +154,12 @@ def main():
 
         wait_key(env, ord("n"), f"[{idx+1}/{n}] {name}. Press 'n' to solve.")
 
-        result = solver.solve_constrained(target, seed=SEED)
+        result = solver.solve(target, seed=SEED)
         s = result.status.value
-        print(f"  status:    {s}  ({result.iterations} iters)")
+        print(f"  status:    {s}")
         print(f"  pos error: {result.position_error:.6f} m")
         print(f"  ori error: {result.orientation_error:.6f} rad")
-        results.append(
-            (
-                name,
-                s,
-                result.position_error,
-                result.orientation_error,
-                result.iterations,
-            )
-        )
+        results.append((name, s, result.position_error, result.orientation_error))
 
         if result.joint_positions is not None:
             apply_solution(env, result.joint_positions)
@@ -192,21 +175,17 @@ def main():
 
     # Summary
     print("\n" + "=" * 80)
-    print("SUMMARY (Pink, CoM + camera constrained)")
+    print("SUMMARY (TRAC-IK, unconstrained)")
     print("=" * 80)
-    print(
-        f"{'Target':<35} {'Status':<15} {'Pos (mm)':<12} {'Ori (deg)':<12} {'Iters':<6}"
-    )
-    print("-" * 80)
+    print(f"{'Target':<35} {'Status':<15} {'Pos (mm)':<12} {'Ori (deg)':<12}")
+    print("-" * 74)
     ok = 0
-    for name, status, pe, oe, iters in results:
+    for name, status, pe, oe in results:
         flag = "" if status == "success" else " <--"
-        print(
-            f"{name:<35} {status:<15} {pe*1000:<12.2f} {np.rad2deg(oe):<12.2f} {iters:<6}{flag}"
-        )
+        print(f"{name:<35} {status:<15} {pe*1000:<12.2f} {np.rad2deg(oe):<12.2f}{flag}")
         if status == "success":
             ok += 1
-    print("-" * 80)
+    print("-" * 74)
     print(f"Success: {ok}/{n}")
 
     wait_key(env, ord("q"), "All targets done. Press 'q' to quit.")

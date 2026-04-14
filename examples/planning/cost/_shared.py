@@ -1,6 +1,6 @@
 """Shared scaffolding for the soft-cost-planning gallery.
 
-Mirrors ``examples/constrained_planning/_shared.py`` one-for-one, with
+Mirrors ``examples/planning/constrained/_shared.py`` one-for-one, with
 one deliberate difference: the demos here drive the planner with a
 :class:`~autolife_planning.planning.costs.Cost` — a scalar CasADi
 expression that RRT*-family planners integrate along every motion —

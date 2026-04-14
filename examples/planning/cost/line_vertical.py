@@ -9,7 +9,7 @@ bend off-axis when doing so shortens the path.
 
 A bold yellow cylinder marks the rail.
 
-    pixi run python examples/cost_planning/line_vertical.py
+    pixi run python examples/planning/cost/line_vertical.py
 """
 
 import casadi as ca
