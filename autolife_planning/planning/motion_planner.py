@@ -324,6 +324,8 @@ class MotionPlanner:
             time_limit,
             self._config.simplify,
             self._config.interpolate,
+            self._config.interpolate_count,
+            self._config.resolution,
         )
 
         if not result.solved:

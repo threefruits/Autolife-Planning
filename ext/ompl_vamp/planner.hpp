@@ -68,6 +68,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -191,7 +192,17 @@ class OmplVampPlanner {
 
   auto plan(std::vector<double> start, std::vector<double> goal,
             const std::string &planner_name, double time_limit, bool simplify,
-            bool interpolate) -> PlanResult {
+            bool interpolate, int interpolate_count, double resolution)
+      -> PlanResult {
+    if (interpolate_count > 0 && resolution > 0.0) {
+      throw std::invalid_argument(
+          "plan: pass at most one of interpolate_count (>0) or resolution "
+          "(>0), not both.");
+    }
+    if (resolution < 0.0) {
+      throw std::invalid_argument(
+          "plan: resolution must be >= 0 (0 disables).");
+    }
     const bool constrained = !constraints_.empty();
     if (constrained) {
       reject_incompatible_planner(planner_name);
@@ -267,9 +278,23 @@ class OmplVampPlanner {
 
       auto &path = ss.getSolutionPath();
       // Interpolate after simplify so the returned path has enough
-      // waypoints to animate smoothly — OMPL's default uses the
-      // longest valid segment fraction of the state space.
-      if (interpolate) path.interpolate();
+      // waypoints to animate smoothly.  Three modes:
+      //   - interpolate_count > 0 : fixed total waypoint count,
+      //       distributed by OMPL across edges by relative length.
+      //   - resolution > 0        : waypoints per unit state-space
+      //       distance — each edge of length d is split into
+      //       ceil(d * resolution) equal segments.
+      //   - both 0                : OMPL default (longest valid
+      //       segment fraction of the state space).
+      if (interpolate) {
+        if (interpolate_count > 0) {
+          path.interpolate(static_cast<unsigned int>(interpolate_count));
+        } else if (resolution > 0.0) {
+          densify_by_resolution(path, active_space, resolution);
+        } else {
+          path.interpolate();
+        }
+      }
       result.path_cost = path.length();
 
       for (std::size_t i = 0; i < path.getStateCount(); ++i) {
@@ -413,6 +438,40 @@ class OmplVampPlanner {
             "manifold — compute target poses from FK on the start config "
             "you intend to plan from.");
       }
+    }
+  }
+
+  // Densify ``path`` so each edge of state-space length ``d`` is
+  // split into ``ceil(d * resolution)`` equal segments.  ``resolution``
+  // is waypoints per unit of state-space distance: higher values give
+  // denser paths.  Uses ``StateSpace::interpolate`` so the inserted
+  // states remain valid under projected/constrained spaces as well
+  // as flat ones.
+  static void densify_by_resolution(og::PathGeometric &path,
+                                    const ob::StateSpacePtr &stsp,
+                                    double resolution) {
+    auto &states = path.getStates();
+    if (states.size() < 2) return;
+    std::vector<ob::State *> snap;
+    snap.reserve(states.size());
+    for (auto *s : states) {
+      auto *c = stsp->allocState();
+      stsp->copyState(c, s);
+      snap.push_back(c);
+    }
+    for (auto *s : states) stsp->freeState(s);
+    states.clear();
+    states.push_back(snap.front());
+    for (std::size_t i = 1; i < snap.size(); ++i) {
+      double d = stsp->distance(snap[i - 1], snap[i]);
+      int n = std::max(1, static_cast<int>(std::ceil(d * resolution)));
+      for (int k = 1; k < n; ++k) {
+        auto *tmp = stsp->allocState();
+        stsp->interpolate(snap[i - 1], snap[i], static_cast<double>(k) / n,
+                          tmp);
+        states.push_back(tmp);
+      }
+      states.push_back(snap[i]);
     }
   }
 

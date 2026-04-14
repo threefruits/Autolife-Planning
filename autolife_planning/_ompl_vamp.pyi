@@ -123,6 +123,8 @@ class OmplVampPlanner:
         time_limit: float = 10.0,
         simplify: bool = True,
         interpolate: bool = True,
+        interpolate_count: int = 0,
+        resolution: float = 64.0,
     ) -> PlanResult:
         """Plan a collision-free path from ``start`` to ``goal``.
 
@@ -134,9 +136,20 @@ class OmplVampPlanner:
             time_limit: Solver time limit in seconds.
             simplify: If true, run ``SimpleSetup::simplifySolution`` on the
                 returned path.
-            interpolate: If true, densify the simplified path with
-                ``PathGeometric::interpolate`` so the returned waypoints
-                are spaced at the longest valid segment fraction.
+            interpolate: If true, densify the simplified path.  Density
+                is picked by ``interpolate_count`` when it is ``> 0``,
+                otherwise by ``resolution`` when it is ``> 0``, otherwise
+                by OMPL's default longest-valid-segment fraction.
+            interpolate_count: Target total waypoint count for the whole
+                path.  OMPL distributes states across edges proportionally
+                to their length.  ``0`` disables this knob.  Cannot be
+                combined with ``resolution``.
+            resolution: Waypoints per unit of state-space distance.  Each
+                edge of length ``d`` is split into ``ceil(d * resolution)``
+                equal segments, so higher values give denser paths.
+                Default ``64.0``.  Set to ``0.0`` to fall back to OMPL's
+                default interpolator.  Cannot be combined with
+                ``interpolate_count``.
         """
         ...
     def validate(self, config: Sequence[float]) -> bool:
