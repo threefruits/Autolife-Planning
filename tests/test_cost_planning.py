@@ -97,3 +97,37 @@ def test_planner_accepts_cost_and_runs():
     # Trivial start==goal plan must succeed regardless of the cost.
     result = planner.plan(start, start)
     assert result.success
+
+
+def test_cost_planned_path_endpoints_match_and_remain_valid():
+    """Real correctness: a real plan must actually go from start to goal,
+    and every waypoint must remain collision-free.
+    """
+    from autolife_planning.planning import create_planner
+    from autolife_planning.types import PlannerConfig
+
+    _ctx, start, cost = _build_height_cost()
+    planner = create_planner(
+        SUBGROUP,
+        config=PlannerConfig(
+            planner_name="rrtstar",
+            time_limit=2.0,
+            simplify=False,
+        ),
+        costs=[cost],
+    )
+    np.random.seed(0)
+    goal = planner.sample_valid()
+    result = planner.plan(start, goal)
+    if not result.success:
+        pytest.skip(f"cost-driven plan did not solve ({result.status.value})")
+
+    assert result.path is not None
+    np.testing.assert_allclose(result.path[0], start, atol=1e-6)
+    np.testing.assert_allclose(result.path[-1], goal, atol=1e-6)
+    for q in result.path:
+        assert planner.validate(q), "every waypoint must be collision-free"
+    # The reported path_cost is the integrated soft cost; with a
+    # non-negative integrand it must be finite and >= 0.
+    assert np.isfinite(result.path_cost)
+    assert result.path_cost >= 0.0

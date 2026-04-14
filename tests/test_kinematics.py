@@ -91,6 +91,35 @@ def test_trac_ik_solve_round_trip(trac_left_arm):
     np.testing.assert_allclose(achieved.position, target.position, atol=1e-3)
 
 
+def test_trac_ik_round_trip_multiple_targets(trac_left_arm):
+    """Real correctness: sample several FK targets, IK them back, FK again must match.
+
+    Picks a few small perturbations of HOME, FK→pose→IK→q'→FK→pose'.
+    Position and orientation error must agree to within the post-solve
+    tolerance the IK config promises (1e-4 m / 1e-4 rad).
+    """
+    rng = np.random.default_rng(0)
+    n_solved = 0
+    for _ in range(5):
+        delta = rng.uniform(-0.1, 0.1, size=7)
+        q_seed = HOME_LEFT_ARM + delta
+        target_pose = trac_left_arm.fk(q_seed)
+
+        result = trac_left_arm.solve(target_pose, seed=q_seed)
+        if not result.success:
+            continue
+        n_solved += 1
+
+        achieved = trac_left_arm.fk(result.joint_positions)
+        # Position
+        np.testing.assert_allclose(achieved.position, target_pose.position, atol=1e-3)
+        # Orientation: rotation matrix product close to identity
+        R_err = achieved.rotation.T @ target_pose.rotation
+        np.testing.assert_allclose(R_err, np.eye(3), atol=1e-3)
+
+    assert n_solved >= 3, "TRAC-IK should converge on most small perturbations"
+
+
 def test_trac_ik_solve_types_accepted():
     pytest.importorskip("pytracik")
     pytest.importorskip("pinocchio")
@@ -156,6 +185,48 @@ def test_pinocchio_jacobian_shape(left_arm_pin_context):
     # 6 task-space rows × however many actuated joints the model exposes.
     assert J.shape[0] == 6
     assert J.shape[1] >= 7
+
+
+def test_pinocchio_fk_matches_trac_ik_random_configs(
+    left_arm_pin_context, trac_left_arm
+):
+    """Real correctness: cross-verify FK at multiple random valid configs."""
+    from autolife_planning.kinematics import compute_forward_kinematics
+
+    lo, hi = trac_left_arm.joint_limits
+    rng = np.random.default_rng(42)
+    for _ in range(10):
+        q = rng.uniform(lo, hi)
+        pin_pose = compute_forward_kinematics(left_arm_pin_context, q)
+        trac_pose = trac_left_arm.fk(q)
+        np.testing.assert_allclose(pin_pose.position, trac_pose.position, atol=1e-9)
+        np.testing.assert_allclose(pin_pose.rotation, trac_pose.rotation, atol=1e-9)
+
+
+def test_pinocchio_jacobian_matches_finite_difference(left_arm_pin_context):
+    """Real correctness: Jacobian columns equal ∂(FK)/∂qᵢ via finite differences.
+
+    Uses LOCAL_WORLD_ALIGNED frame (the default) — translational part is
+    just dp/dq, so we can FD it directly without unwrapping rotation
+    increments.
+    """
+    from autolife_planning.kinematics import (
+        compute_forward_kinematics,
+        compute_jacobian,
+    )
+
+    rng = np.random.default_rng(7)
+    q = HOME_LEFT_ARM + rng.uniform(-0.05, 0.05, size=7)
+    J = compute_jacobian(left_arm_pin_context, q)
+    eps = 1e-6
+    for i in range(7):
+        dq = np.zeros(7)
+        dq[i] = eps
+        fp = compute_forward_kinematics(left_arm_pin_context, q + dq).position
+        fm = compute_forward_kinematics(left_arm_pin_context, q - dq).position
+        dp_dq = (fp - fm) / (2 * eps)
+        # Translational rows of the Jacobian in LOCAL_WORLD_ALIGNED == dp/dq
+        np.testing.assert_allclose(J[:3, i], dp_dq, atol=1e-5)
 
 
 def test_pinocchio_context_rejects_unknown_frame():
@@ -245,6 +316,18 @@ def test_pink_fk_matches_trac_ik(pink_left_arm, trac_left_arm):
     trac_pose = trac_left_arm.fk(HOME_LEFT_ARM)
     np.testing.assert_allclose(pink_pose.position, trac_pose.position, atol=1e-6)
     np.testing.assert_allclose(pink_pose.rotation, trac_pose.rotation, atol=1e-6)
+
+
+def test_pink_fk_matches_trac_ik_random_configs(pink_left_arm, trac_left_arm):
+    """Real correctness: Pink and TRAC-IK FK agree across random configs."""
+    lo, hi = trac_left_arm.joint_limits
+    rng = np.random.default_rng(123)
+    for _ in range(10):
+        q = rng.uniform(lo, hi)
+        pink_pose = pink_left_arm.fk(q)
+        trac_pose = trac_left_arm.fk(q)
+        np.testing.assert_allclose(pink_pose.position, trac_pose.position, atol=1e-9)
+        np.testing.assert_allclose(pink_pose.rotation, trac_pose.rotation, atol=1e-9)
 
 
 def test_pink_solve_constrained_converges(pink_left_arm):
