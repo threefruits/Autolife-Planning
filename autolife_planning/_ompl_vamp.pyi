@@ -127,6 +127,34 @@ class OmplVampPlanner:
     def num_constraints(self) -> int:
         """Number of constraints currently registered."""
         ...
+    def add_compiled_cost(
+        self,
+        so_path: str,
+        symbol_name: str,
+        ambient_dim: int,
+        weight: float = 1.0,
+    ) -> None:
+        """Load a CasADi-generated shared library as a soft path cost.
+
+        The cost is wrapped as an ``ompl::StateCostIntegralObjective``
+        — trapezoidally integrated along every motion — and drives
+        the search of asymptotically-optimal planners (RRT*, BIT*,
+        AIT*, …).  Multiple costs are summed with their ``weight``.
+
+        Args:
+            so_path: Path to the compiled ``.so`` file.
+            symbol_name: CasADi function symbol name inside the library.
+            ambient_dim: Dimension of the joint space (must match
+                :meth:`dimension`).
+            weight: Positive scalar multiplier applied to the cost.
+        """
+        ...
+    def clear_costs(self) -> None:
+        """Drop every accumulated cost."""
+        ...
+    def num_costs(self) -> int:
+        """Number of costs currently registered."""
+        ...
     def plan(
         self,
         start: Sequence[float],

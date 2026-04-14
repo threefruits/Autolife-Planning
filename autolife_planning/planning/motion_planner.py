@@ -57,6 +57,7 @@ class MotionPlanner:
         pointcloud: np.ndarray | None = None,
         base_config: np.ndarray | None = None,
         constraints: list | None = None,
+        costs: list | None = None,
     ) -> None:
         from autolife_planning._ompl_vamp import OmplVampPlanner
         from autolife_planning.config.robot_config import (
@@ -115,6 +116,9 @@ class MotionPlanner:
 
         if constraints:
             self._push_constraints(constraints)
+
+        if costs:
+            self._push_costs(costs)
 
     # ── Properties ────────────────────────────────────────────────────
 
@@ -180,6 +184,41 @@ class MotionPlanner:
         """Replace all constraints: clear existing, then push new ones."""
         self.clear_constraints()
         self._push_constraints(constraints)
+
+    # ── Cost integration ──────────────────────────────────────────────
+
+    def _push_costs(self, costs) -> None:
+        """Push compiled CasADi costs to the C++ planner."""
+        from autolife_planning.planning.costs import Cost
+
+        for c in costs:
+            if not isinstance(c, Cost):
+                raise TypeError(
+                    f"costs must be Cost instances from "
+                    f"autolife_planning.planning.costs; "
+                    f"got {type(c).__name__}"
+                )
+            if c.ambient_dim != self._ndof:
+                raise ValueError(
+                    f"Cost ambient_dim ({c.ambient_dim}) does not match "
+                    f"planner active dimension ({self._ndof}).  Build the "
+                    f"Cost with a SymbolicContext for the same subgroup."
+                )
+            self._planner.add_compiled_cost(
+                str(c.so_path),
+                c.symbol_name,
+                c.ambient_dim,
+                float(c.weight),
+            )
+
+    def clear_costs(self) -> None:
+        """Remove all costs from the planner (falls back to path length)."""
+        self._planner.clear_costs()
+
+    def set_costs(self, costs: list) -> None:
+        """Replace all costs: clear existing, then push new ones."""
+        self.clear_costs()
+        self._push_costs(costs)
 
     # ── Pointcloud environment ────────────────────────────────────────
 
@@ -405,6 +444,7 @@ def create_planner(
     pointcloud: np.ndarray | None = None,
     base_config: np.ndarray | None = None,
     constraints: list | None = None,
+    costs: list | None = None,
 ) -> MotionPlanner:
     """Create a motion planner for any robot or subgroup.
 
@@ -425,8 +465,18 @@ def create_planner(
             switches to ``ProjectedStateSpace`` and projects every state
             onto the constraint manifold.  Both ``start`` and ``goal``
             passed to ``plan(...)`` must already lie on the manifold.
+        costs: Optional list of
+            :class:`~autolife_planning.planning.costs.Cost` instances
+            (CasADi-backed).  Soft per-state terms summed with their
+            weights and trapezoidally integrated along every motion —
+            the asymptotically-optimal planners (``rrtstar``,
+            ``bitstar``, ``aitstar``, …) minimise this objective.
+            Without any costs the planner uses OMPL's default
+            path-length objective.
 
     Returns:
         A :class:`MotionPlanner` instance.
     """
-    return MotionPlanner(robot_name, config, pointcloud, base_config, constraints)
+    return MotionPlanner(
+        robot_name, config, pointcloud, base_config, constraints, costs
+    )
