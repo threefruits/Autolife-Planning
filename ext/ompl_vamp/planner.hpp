@@ -19,6 +19,7 @@
 
 #include <ompl/base/ConstrainedSpaceInformation.h>
 #include <ompl/base/Constraint.h>
+#include <ompl/base/OptimizationObjective.h>
 #include <ompl/base/SpaceInformation.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <ompl/base/spaces/constraint/ConstrainedStateSpace.h>
@@ -26,6 +27,7 @@
 #include <ompl/geometric/SimpleSetup.h>
 
 #include "compiled_constraint.hpp"
+#include "compiled_cost.hpp"
 #include "validity.hpp"
 // OMPL — informed trees
 #include <ompl/geometric/planners/informedtrees/ABITstar.h>
@@ -204,6 +206,42 @@ class OmplVampPlanner {
 
   std::size_t num_constraints() const { return constraints_.size(); }
 
+  // ── Cost API ──────────────────────────────────────────────────────
+  //
+  // Costs are soft per-state terms integrated along every motion by
+  // OMPL's StateCostIntegralObjective.  They do not constrain the
+  // feasible set — collision checking still does that — but they
+  // shape the solution returned by asymptotically-optimal planners
+  // such as RRT*, BIT*, AIT*, …  Without a user-supplied cost the
+  // planner falls back to OMPL's default path-length objective.
+  //
+  // Multiple costs are summed via MultiOptimizationObjective with
+  // the weights supplied at add time.
+
+  void add_compiled_cost(const std::string &so_path,
+                         const std::string &symbol_name,
+                         unsigned int ambient_dim, double weight) {
+    if (static_cast<int>(ambient_dim) != active_dim_) {
+      throw std::invalid_argument(
+          "add_compiled_cost: ambient_dim (" + std::to_string(ambient_dim) +
+          ") does not match planner active dimension (" +
+          std::to_string(active_dim_) + ")");
+    }
+    if (weight < 0.0) {
+      throw std::invalid_argument("add_compiled_cost: weight must be >= 0");
+    }
+    cost_libs_.push_back(
+        std::make_shared<CostLibrary>(ambient_dim, so_path, symbol_name));
+    cost_weights_.push_back(weight);
+  }
+
+  void clear_costs() {
+    cost_libs_.clear();
+    cost_weights_.clear();
+  }
+
+  std::size_t num_costs() const { return cost_libs_.size(); }
+
   auto plan(std::vector<double> start, std::vector<double> goal,
             const std::string &planner_name, double time_limit, bool simplify,
             bool interpolate, int interpolate_count, double resolution)
@@ -268,6 +306,14 @@ class OmplVampPlanner {
 
     og::SimpleSetup ss(si);
     ss.setPlanner(create_planner(si, planner_name));
+
+    // Wire soft costs (if any) as the optimisation objective.  RRT*,
+    // BIT*, AIT* and friends will drive their rewiring against this
+    // objective; for planners that don't consume it the setting is
+    // harmless.
+    if (!cost_libs_.empty()) {
+      ss.setOptimizationObjective(build_objective(si));
+    }
 
     ob::ScopedState<> ompl_start(active_space);
     ob::ScopedState<> ompl_goal(active_space);
@@ -375,6 +421,7 @@ class OmplVampPlanner {
     for (std::size_t i = 0; i < frozen_config.size(); ++i)
       frozen_config_[i] = static_cast<float>(frozen_config[i]);
     constraints_.clear();
+    clear_costs();
     rebuild_space_();
   }
 
@@ -385,6 +432,7 @@ class OmplVampPlanner {
     active_indices_.clear();
     frozen_config_.clear();
     constraints_.clear();
+    clear_costs();
     rebuild_space_();
   }
 
@@ -397,8 +445,34 @@ class OmplVampPlanner {
   FloatEnv float_env_;
   VampEnv env_;
   std::vector<ob::ConstraintPtr> constraints_;
+  std::vector<std::shared_ptr<CostLibrary>> cost_libs_;
+  std::vector<double> cost_weights_;
 
   void sync_env() { env_ = VampEnv(float_env_); }
+
+  // Build the OMPL OptimizationObjective for the active cost set.
+  // One CostLibrary backs each CompiledCost adapter — the adapter
+  // is re-created per plan() call so it binds to the correct
+  // (flat or constrained) SpaceInformation, but the dlopen'd
+  // library is reused.
+  std::shared_ptr<ob::OptimizationObjective> build_objective(
+      const ob::SpaceInformationPtr &si) const {
+    if (cost_libs_.size() == 1) {
+      return std::make_shared<CompiledCost>(si, cost_libs_[0],
+                                            cost_weights_[0]);
+    }
+    auto multi = std::make_shared<ob::MultiOptimizationObjective>(si);
+    for (std::size_t i = 0; i < cost_libs_.size(); ++i) {
+      // MultiOptimizationObjective applies its own weight on top of
+      // whatever OptimizationObjective::stateCost() returns, so we
+      // bake the per-cost weight into the adapter (weight 1.0 here)
+      // to keep a single source of truth for the scaling factor.
+      multi->addObjective(
+          std::make_shared<CompiledCost>(si, cost_libs_[i], cost_weights_[i]),
+          1.0);
+    }
+    return multi;
+  }
 
   void rebuild_space_() {
     Robot::Configuration lo, hi;
