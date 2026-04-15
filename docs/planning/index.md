@@ -121,7 +121,7 @@ obstacle (same scene as `examples/planning/motion.py`).
 ## Minimal example
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/motion_planning.mp4" type="video/mp4">
+  <source src="../../assets/motion_planning.mp4" type="video/mp4">
 </video>
 
 ```python

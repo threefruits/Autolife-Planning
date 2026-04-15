@@ -7,7 +7,7 @@ valid solution first, with optional weighting of the solution by
 distance, manipulability, or raw speed.
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/trac_ik.mp4" type="video/mp4">
+  <source src="../../assets/trac_ik.mp4" type="video/mp4">
 </video>
 
 ## Minimal example

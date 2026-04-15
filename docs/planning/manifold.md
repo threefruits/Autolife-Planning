@@ -47,7 +47,7 @@ Keep the gripper's world z equal to its home value \(z_0\):
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/constrained_plane.mp4" type="video/mp4">
+  <source src="../../assets/constrained_plane.mp4" type="video/mp4">
 </video>
 
 ## Plane + obstacle
@@ -58,7 +58,7 @@ route around the obstacle — the collision check runs against a
 pointcloud on the inflated sphere.
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/constrained_plane_obstacle.mp4" type="video/mp4">
+  <source src="../../assets/constrained_plane_obstacle.mp4" type="video/mp4">
 </video>
 
 ## Horizontal rail
@@ -108,7 +108,7 @@ two orientation axes (first two columns of \(R(q)\)):
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/constrained_line_horizontal.mp4" type="video/mp4">
+  <source src="../../assets/constrained_line_horizontal.mp4" type="video/mp4">
 </video>
 
 ## Vertical rail
@@ -155,7 +155,7 @@ and the orientation axes fixed:
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/constrained_line_vertical.mp4" type="video/mp4">
+  <source src="../../assets/constrained_line_vertical.mp4" type="video/mp4">
 </video>
 
 ## Orientation lock (translation free)
@@ -198,7 +198,7 @@ Let the gripper translate anywhere but fix its orientation exactly:
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/constrained_orientation_lock.mp4" type="video/mp4">
+  <source src="../../assets/constrained_orientation_lock.mp4" type="video/mp4">
 </video>
 
 ## How to plug it into a planner

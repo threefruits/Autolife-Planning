@@ -14,7 +14,7 @@ order — single joint, head + one finger, left arm + one leg, the
 mobile base plus one waist pitch, anything.
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/subgroup_planning.mp4" type="video/mp4">
+  <source src="../../assets/subgroup_planning.mp4" type="video/mp4">
 </video>
 
 ## Built-in aliases

@@ -8,7 +8,7 @@ posture regularizer. Each step returns a joint-velocity command
 that best satisfies all of them under the given weights.
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/constrained_ik.mp4" type="video/mp4">
+  <source src="../../assets/constrained_ik.mp4" type="video/mp4">
 </video>
 
 ## Minimal example

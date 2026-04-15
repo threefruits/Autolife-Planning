@@ -6,9 +6,11 @@
 [![Build Docs](https://img.shields.io/github/actions/workflow/status/H-tr/Autolife-Planning/docs.yml?branch=main&style=for-the-badge&label=docs%20build&logo=github)](https://github.com/H-tr/Autolife-Planning/actions/workflows/docs.yml)
 [![CI](https://img.shields.io/github/actions/workflow/status/H-tr/Autolife-Planning/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github)](https://github.com/H-tr/Autolife-Planning/actions/workflows/ci.yml)
 
-**[Documentation](https://h-tr.github.io/Autolife-Planning/)** | **[API Reference](https://h-tr.github.io/Autolife-Planning/api/kinematics/)** | **[Examples](https://h-tr.github.io/Autolife-Planning/examples/)**
+**[Documentation](https://h-tr.github.io/Autolife-Planning/)** | **[API Reference](https://h-tr.github.io/Autolife-Planning/api/kinematics/)**
 
-https://github.com/H-tr/Autolife-Planning/raw/main/docs/assets/rls_pick_place.mp4
+[![rls_pick_place demo](docs/assets/rls_pick_place.gif)](https://github.com/H-tr/Autolife-Planning/raw/main/docs/assets/rls_pick_place.mp4)
+
+<sub>↑ 4× sped-up preview — click for full-quality MP4</sub>
 
 </div>
 

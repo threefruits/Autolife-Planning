@@ -61,7 +61,7 @@ Pull the gripper toward its home height \(z_0\):
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/cost_plane.mp4" type="video/mp4">
+  <source src="../../assets/cost_plane.mp4" type="video/mp4">
 </video>
 
 ## Horizontal rail
@@ -113,7 +113,7 @@ Prefer a 1-D line in world \(x\) with the orientation frozen:
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/cost_line_horizontal.mp4" type="video/mp4">
+  <source src="../../assets/cost_line_horizontal.mp4" type="video/mp4">
 </video>
 
 ## Vertical rail
@@ -162,7 +162,7 @@ Soft vertical rail — same pattern, now along world \(z\):
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/cost_line_vertical.mp4" type="video/mp4">
+  <source src="../../assets/cost_line_vertical.mp4" type="video/mp4">
 </video>
 
 ## Orientation lock
@@ -205,7 +205,7 @@ Let the gripper translate freely but prefer the home orientation:
 </div>
 
 <video controls loop muted playsinline width="100%">
-  <source src="../assets/cost_orientation_lock.mp4" type="video/mp4">
+  <source src="../../assets/cost_orientation_lock.mp4" type="video/mp4">
 </video>
 
 ## How to plug it into a planner
