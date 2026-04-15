@@ -41,6 +41,8 @@ theme:
 
 markdown_extensions:
   - admonition
+  - pymdownx.arithmatex:
+      generic: true
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight:
@@ -57,6 +59,10 @@ markdown_extensions:
   - md_in_html
   - toc:
       permalink: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 plugins:
   - search
@@ -78,6 +84,15 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Inverse Kinematics:
+      - Overview: ik/index.md
+      - Unconstrained (TRAC-IK): ik/unconstrained.md
+      - Constrained (Pink): ik/constrained.md
+  - Motion Planning:
+      - Overview: planning/index.md
+      - Subgroup planning: planning/subgroup.md
+      - Manifold planning: planning/manifold.md
+      - Cost-space planning: planning/cost.md
   - API Reference:
       - Kinematics: api/kinematics.md
       - Motion Planning: api/planning.md
@@ -85,4 +100,3 @@ nav:
       - Configuration: api/config.md
       - Environments: api/environments.md
       - Utilities: api/utilities.md
-  - Examples: examples.md
