@@ -1,5 +1,12 @@
 # Configuration
 
-## Robot Configuration
+## Autolife Robot (values)
 
-::: autolife_planning.config.robot_config
+Concrete joint groups, home pose, URDF chains, planning subgroups, and
+the top-level `RobotConfig` instance for the Autolife robot.
+
+::: autolife_planning.autolife
+
+Dataclasses (`RobotConfig`, `ChainConfig`, `CameraConfig`,
+`PlannerConfig`, `IKConfig`, …) live in
+[Types](types.md).

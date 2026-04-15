@@ -1,0 +1,32 @@
+
+[Environment]
+  CPU:    13th Gen Intel(R) Core(TM) i9-13900KF (24 logical CPUs, 1 socket(s))
+  Kernel: Linux 6.8.0-110-generic
+  Python: 3.12.13
+
+[Collision check]  planner.validate(config)
+  3236 ns / call   ~ 0.31 M checks / s
+
+[Plan time — feasibility planners]  median / p95 in ms, search-only, N = 20 per cell
+  planner               left_arm          dual_arm          autolife
+  ------------------------------------------------------------------
+  rrtc             1.11 /   1.14     1.12 /   1.16     1.08 /   1.14
+  rrt              2.15 /   3.26     3.20 /   5.30     2.15 /  10.58
+  kpiece           1.10 /   2.34     1.66 /   3.21     1.10 /   4.25
+  bkpiece          2.17 /   3.28     8.49 /  19.18    34.84 /  71.71
+  lbkpiece         2.14 /   2.21     8.49 /  15.85   113.35 / 164.47
+  prm              1.11 /   3.22     1.12 /   3.21     2.15 /   4.24
+  lazyprm          1.10 /   1.16     3.74 /  79.11     3.22 /  12.71
+  est              1.13 /   4.27     2.14 /   5.34     2.16 /   6.39
+  biest            1.13 /   2.21     3.25 /   6.42     2.16 /   4.28
+  sbl              1.11 /   1.14     2.17 /   3.25     8.48 /  16.96
+  stride           2.15 /   3.24     2.67 /   8.46     2.15 /   3.26
+
+[Path cost — AO planners]  median cost after 1.0s budget, N = 20 per cell
+  planner               left_arm          dual_arm          autolife
+  ------------------------------------------------------------------
+  rrtstar                   4.18              9.16             15.54
+  bitstar                   4.05              5.21             16.65
+  aitstar                   4.20              6.43             17.10
+  eitstar                   4.11              6.01             14.59
+  fmt                       4.55              6.21             14.35

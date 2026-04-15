@@ -53,6 +53,7 @@ from autolife_planning.envs.pybullet_env import PyBulletEnv  # noqa: E402
 from autolife_planning.kinematics import create_ik_solver  # noqa: E402
 from autolife_planning.planning import (  # noqa: E402
     Constraint,
+    Cost,
     SymbolicContext,
     create_planner,
 )
@@ -779,6 +780,214 @@ def record_constrained_orientation_lock(out: Path) -> None:
     )
 
 
+# ───────────────────── cost-planning helpers ────────────────────────────
+#
+# Mirrors the constrained-planning renderers above, with one swap:
+# every hard ``Constraint`` becomes a ``Cost`` that integrates
+# ``sumsqr(residual)`` along every motion.  Goals still come from
+# projecting onto ``residual = 0`` so the animation clearly shows
+# the arm preferring the soft manifold whenever it can.
+
+
+def _record_cost(
+    out: Path,
+    title: str,
+    build_cost,
+    score,
+    after_setup=None,
+    time_limit: float = 10.0,
+    weight: float = 50.0,
+    planner_name: str = "rrtstar",
+    camera: CameraView | None = None,
+) -> None:
+    env, ctx, start = _setup_constrained()
+
+    cost, residual = build_cost(ctx, start, env)
+    planner = create_planner(
+        SUBGROUP,
+        config=PlannerConfig(
+            planner_name=planner_name,
+            time_limit=time_limit,
+            # OMPL's default simplifier takes geometric shortcuts that
+            # ignore the custom cost; disabling it keeps the shape that
+            # RRT*-family search produced.
+            simplify=False,
+        ),
+        costs=[cost],
+    )
+    goal = _find_goal(ctx, residual, start, planner, score=score)
+
+    if after_setup is not None:
+        after_setup(env, ctx, start, goal)
+
+    result = planner.plan(start, goal)
+    if not result.success or result.path is None:
+        raise RuntimeError(f"{title}: planning failed")
+
+    full_path = planner.embed_path(result.path)
+    cam = camera or CameraView()
+
+    with VideoRecorder(env, out, camera=cam) as rec:
+        rec.hold(seconds=0.6)
+        rec.play_path(full_path, duration=7.0)
+        rec.hold(seconds=0.6)
+
+    _log(title, out, f"{result.path.shape[0]} waypoints")
+
+
+def record_cost_plane(out: Path) -> None:
+    def build(ctx, start, env):
+        p0 = _ee_tcp_eval(ctx, start)
+        residual = _ee_tcp_sym(ctx)[2] - float(p0[2])
+        return (
+            Cost(
+                expression=ca.sumsqr(residual),
+                q_sym=ctx.q,
+                name="plane_z_cost",
+                weight=50.0,
+            ),
+            residual,
+        )
+
+    def after(env, ctx, start, goal):
+        p0 = _ee_tcp_eval(ctx, start)
+        p_goal = _ee_tcp_eval(ctx, goal)
+        env.draw_plane(
+            center=[
+                float(0.5 * (p0[0] + p_goal[0])),
+                float(0.5 * (p0[1] + p_goal[1])),
+                float(p0[2]) - 0.05,
+            ],
+            half_sizes=(0.65, 0.65),
+            color=(0.95, 0.55, 0.15, 0.22),
+        )
+
+    _record_cost(
+        out,
+        "cost plane: gripper pulled toward z = z₀",
+        build,
+        score=lambda xyz: abs(xyz[1] - 0.25) + 0.3 * abs(xyz[0]),
+        after_setup=after,
+    )
+
+
+def record_cost_line_horizontal(out: Path) -> None:
+    def build(ctx, start, env):
+        p0 = _ee_tcp_eval(ctx, start)
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
+        tcp = _ee_tcp_sym(ctx)
+        left_rot = ctx.link_rotation(EE_LINK)
+        residual = ca.vertcat(
+            tcp[1] - float(p0[1]),
+            tcp[2] - float(p0[2]),
+            left_rot[:, 0] - ca.DM(R0[:, 0].tolist()),
+            left_rot[:, 1] - ca.DM(R0[:, 1].tolist()),
+        )
+        return (
+            Cost(
+                expression=ca.sumsqr(residual),
+                q_sym=ctx.q,
+                name="line_h_cost",
+                weight=50.0,
+            ),
+            residual,
+        )
+
+    def after(env, ctx, start, goal):
+        p0 = _ee_tcp_eval(ctx, start)
+        p_goal = _ee_tcp_eval(ctx, goal)
+        env.draw_rod(
+            p1=[float(p0[0]) - 0.10, float(p0[1]), float(p0[2])],
+            p2=[float(p_goal[0]) + 0.10, float(p0[1]), float(p0[2])],
+            radius=0.008,
+            color=(0.95, 0.55, 0.15, 1.0),
+        )
+
+    _record_cost(
+        out,
+        "cost line_h: gripper pulled toward a horizontal rail",
+        build,
+        score=lambda xyz: xyz[0],
+        after_setup=after,
+    )
+
+
+def record_cost_line_vertical(out: Path) -> None:
+    def build(ctx, start, env):
+        p0 = _ee_tcp_eval(ctx, start)
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
+        tcp = _ee_tcp_sym(ctx)
+        left_rot = ctx.link_rotation(EE_LINK)
+        residual = ca.vertcat(
+            tcp[0] - float(p0[0]),
+            tcp[1] - float(p0[1]),
+            left_rot[:, 0] - ca.DM(R0[:, 0].tolist()),
+            left_rot[:, 1] - ca.DM(R0[:, 1].tolist()),
+        )
+        return (
+            Cost(
+                expression=ca.sumsqr(residual),
+                q_sym=ctx.q,
+                name="line_v_cost",
+                weight=50.0,
+            ),
+            residual,
+        )
+
+    def after(env, ctx, start, goal):
+        p0 = _ee_tcp_eval(ctx, start)
+        p_goal = _ee_tcp_eval(ctx, goal)
+        env.draw_rod(
+            p1=[float(p0[0]), float(p0[1]), float(p0[2]) - 0.10],
+            p2=[float(p0[0]), float(p0[1]), float(p_goal[2]) + 0.10],
+            radius=0.008,
+            color=(0.95, 0.55, 0.15, 1.0),
+        )
+
+    _record_cost(
+        out,
+        "cost line_v: gripper pulled toward a vertical rail",
+        build,
+        score=lambda xyz: xyz[2],
+        after_setup=after,
+    )
+
+
+def record_cost_orientation_lock(out: Path) -> None:
+    def build(ctx, start, env):
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
+        left_rot = ctx.link_rotation(EE_LINK)
+        residual = ca.vertcat(
+            left_rot[:, 0] - ca.DM(R0[:, 0].tolist()),
+            left_rot[:, 1] - ca.DM(R0[:, 1].tolist()),
+        )
+        return (
+            Cost(
+                expression=ca.sumsqr(residual),
+                q_sym=ctx.q,
+                name="orient_lock_cost",
+                weight=50.0,
+            ),
+            residual,
+        )
+
+    def after(env, ctx, start, goal):
+        p0 = _ee_tcp_eval(ctx, start)
+        R0 = np.asarray(ctx.evaluate_link_pose(EE_LINK, start))[:3, :3]
+        p_goal = _ee_tcp_eval(ctx, goal)
+        env.draw_frame(p0, R0, size=0.12, radius=0.007)
+        env.draw_frame(p_goal, R0, size=0.12, radius=0.007)
+        env.draw_rod(p0, p_goal, radius=0.004, color=(0.95, 0.55, 0.15, 0.9))
+
+    _record_cost(
+        out,
+        "cost orient: translation free, orientation softly locked",
+        build,
+        score=lambda xyz: float(np.linalg.norm(xyz)),
+        after_setup=after,
+    )
+
+
 # ───────────────────── main ─────────────────────────────────────────────
 
 
@@ -808,6 +1017,10 @@ CLIPS = [
         record_constrained_orientation_lock,
         "constrained_orientation_lock.mp4",
     ),
+    ("cost_plane", record_cost_plane, "cost_plane.mp4"),
+    ("cost_line_h", record_cost_line_horizontal, "cost_line_horizontal.mp4"),
+    ("cost_line_v", record_cost_line_vertical, "cost_line_vertical.mp4"),
+    ("cost_orient", record_cost_orientation_lock, "cost_orientation_lock.mp4"),
 ]
 
 
