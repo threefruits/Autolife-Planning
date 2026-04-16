@@ -3,7 +3,15 @@ project(autolife_planning_ext LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-cmake_policy(SET CMP0167 NEW)
+
+# CMP0167 NEW requires BoostConfig.cmake (Boost >= 1.70). manylinux_2_28
+# (AlmaLinux 8) ships Boost 1.66, which only provides the legacy
+# FindBoost.cmake interface. Force the legacy path so the same CMakeLists
+# builds against both old (EL8) and modern (conda) Boost.
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+endif()
+set(Boost_NO_BOOST_CMAKE ON)
 
 # ── Dependencies ──────────────────────────────────────────────────────
 
@@ -19,14 +27,23 @@ if(PkgConfig_FOUND AND NOT orocos_kdl_FOUND)
 endif()
 find_package(NLopt QUIET)
 
+# ── Architecture flags ───────────────────────────────────────────────
+# x86-64-v3 is the Haswell (2013+) micro-arch level: guarantees AVX2,
+# BMI1/BMI2, FMA — everything VAMP/SIMDxorshift rely on. Using a fixed
+# level instead of -march=native so CI-built wheels run on any modern
+# x86_64 CPU, not only the builder. Override for local perf builds:
+#   cmake -DAUTOLIFE_ARCH_FLAGS=-march=native ...
+set(AUTOLIFE_ARCH_FLAGS "-march=x86-64-v3"
+    CACHE STRING "Target CPU arch flags for native extensions")
+separate_arguments(AUTOLIFE_ARCH_FLAGS_LIST NATIVE_COMMAND "${AUTOLIFE_ARCH_FLAGS}")
+
 # ── VAMP dependencies (header-only, fetched via CPM) ─────────────────
 
 include(third_party/vamp/cmake/FetchInitCPM.cmake)
 include(third_party/vamp/cmake/Dependencies.cmake)
 
-# SIMDxorshift needs AVX2 (conda compiler defaults to -march=nocona)
 if(TARGET simdxorshift)
-    target_compile_options(simdxorshift PRIVATE -march=native)
+    target_compile_options(simdxorshift PRIVATE ${AUTOLIFE_ARCH_FLAGS_LIST})
 endif()
 
 # VAMP headers (our fork with Autolife robot — header-only)
@@ -65,7 +82,7 @@ target_link_libraries(_ompl_vamp PRIVATE
 )
 
 target_compile_options(_ompl_vamp PRIVATE
-    -march=native
+    ${AUTOLIFE_ARCH_FLAGS_LIST}
 )
 
 install(TARGETS _ompl_vamp LIBRARY DESTINATION autolife_planning)
@@ -86,7 +103,7 @@ target_link_libraries(_time_parameterization PRIVATE
 )
 
 target_compile_options(_time_parameterization PRIVATE
-    -march=native
+    ${AUTOLIFE_ARCH_FLAGS_LIST}
 )
 
 install(TARGETS _time_parameterization LIBRARY DESTINATION autolife_planning)
