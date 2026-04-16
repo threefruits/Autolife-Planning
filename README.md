@@ -2,6 +2,8 @@
 
 <div align="center">
 
+[![PyPI](https://img.shields.io/pypi/v/autolife-planning?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/autolife-planning/)
+[![Python](https://img.shields.io/pypi/pyversions/autolife-planning?style=for-the-badge&logo=python&logoColor=white)](https://pypi.org/project/autolife-planning/)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=for-the-badge&logo=materialformkdocs)](https://h-tr.github.io/Autolife-Planning/)
 [![Build Docs](https://img.shields.io/github/actions/workflow/status/H-tr/Autolife-Planning/docs.yml?branch=main&style=for-the-badge&label=docs%20build&logo=github)](https://github.com/H-tr/Autolife-Planning/actions/workflows/docs.yml)
 [![CI](https://img.shields.io/github/actions/workflow/status/H-tr/Autolife-Planning/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github)](https://github.com/H-tr/Autolife-Planning/actions/workflows/ci.yml)
