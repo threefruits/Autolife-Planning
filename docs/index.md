@@ -1,8 +1,9 @@
 # Autolife Planning
 
 A planning library for the **Autolife robot** — inverse kinematics
-(TRAC-IK and Pink QP) and motion planning (OMPL frontend, VAMP SIMD
-collision backend) behind a unified Python API.
+(TRAC-IK and Pink QP), motion planning (OMPL frontend, VAMP SIMD
+collision backend), and time-optimal trajectory generation, all behind
+a unified Python API.
 
 <video controls autoplay loop muted playsinline width="100%">
   <source src="assets/rls_pick_place.mp4" type="video/mp4">
@@ -71,6 +72,14 @@ collision backend) behind a unified Python API.
     Path-integral soft costs (orientation preference, pose
     stabilization, …) compiled from CasADi and driving OMPL's
     asymptotically-optimal planners (RRT\*, BIT\*, AIT\*, …).
+
+-   :material-timer-outline:{ .lg .middle } [__Time Parameterization__](planning/trajectory.md)
+
+    ---
+
+    Time-optimal trajectory generation (TOTG) converts geometric paths
+    into executable trajectories with per-joint velocity and acceleration
+    limits — bridging the planner's output to hardware.
 
 </div>
 

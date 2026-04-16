@@ -1,6 +1,6 @@
 site_name: Autolife Planning
 site_url: https://h-tr.github.io/Autolife-Planning/
-site_description: Planning library for the Autolife robot — motion planning, inverse kinematics, and collision-aware planning.
+site_description: Planning library for the Autolife robot — motion planning, trajectory generation, inverse kinematics, and collision-aware planning.
 repo_url: https://github.com/H-tr/Autolife-Planning
 repo_name: H-tr/Autolife-Planning
 
@@ -93,9 +93,11 @@ nav:
       - Subgroup planning: planning/subgroup.md
       - Manifold planning: planning/manifold.md
       - Cost-space planning: planning/cost.md
+      - Time parameterization: planning/trajectory.md
   - API Reference:
       - Kinematics: api/kinematics.md
       - Motion Planning: api/planning.md
+      - Trajectory: api/trajectory.md
       - Types: api/types.md
       - Configuration: api/config.md
       - Environments: api/environments.md

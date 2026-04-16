@@ -20,6 +20,7 @@ A planning library for the Autolife robot. It provides inverse kinematics (TRAC-
 
 - **Inverse Kinematics** — TRAC-IK (unconstrained) and Pink (QP-based constrained) solvers with CoM stability, camera stabilization, and self-collision avoidance
 - **Motion Planning** — VAMP-based planner with collision checking, path validation, and subgroup planning
+- **Time Parameterization** — Time-optimal trajectory generation (TOTG) converts planned paths into executable trajectories with velocity/acceleration limits
 - **Collision Geometry** — Spherized URDF representations for efficient collision detection, pointcloud obstacle support
 
 ## Quick Start
@@ -56,6 +57,9 @@ pixi run python examples/planning/subgroup.py
 pixi run -e dev python examples/planning/constrained/plane.py
 pixi run -e dev python examples/planning/cost/orientation_lock.py
 
+# Time parameterization
+pixi run python examples/planning/time_parameterization.py
+
 # End-to-end pick-and-place demo (the video above)
 pixi run -e dev python examples/demos/rls_pick_place.py
 
@@ -88,3 +92,12 @@ resources/             # Robot URDF and mesh files
 assets/                # Scene pointclouds and env meshes
 docs/                  # MkDocs site sources (GitHub Pages)
 ```
+
+## Acknowledgements
+
+This project builds on several outstanding open-source libraries:
+
+- **[VAMP](https://github.com/KavrakiLab/vamp)** — SIMD-accelerated motion planning and collision checking (Kavrakilab, Rice University).
+- **[OMPL](https://ompl.kavrakilab.org/)** — The Open Motion Planning Library (Kavrakilab, Rice University).
+- **[MoveIt 2](https://github.com/moveit/moveit2)** — The vendored TOTG (Time-Optimal Trajectory Generation) implementation in `ext/time_parameterization/` is adapted from MoveIt 2's `trajectory_processing` module, originally by Tobias Kunz and Mike Stilman (Georgia Tech). See `ext/time_parameterization/LICENSE.TOTG` for the full BSD license.
+- **[TRAC-IK](https://traclabs.com/projects/trac-ik/)** — Inverse kinematics solver (TRACLabs).

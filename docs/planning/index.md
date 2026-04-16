@@ -335,4 +335,12 @@ good_goals = goals[mask]
     now the constraint becomes a preference. Drives OMPL's
     asymptotically-optimal planners.
 
+-   [__Time parameterization__](trajectory.md)
+
+    ---
+
+    Convert geometric paths into time-optimal trajectories with
+    per-joint velocity and acceleration limits. TOTG (Kunz-Stilman)
+    in C++, one call from Python.
+
 </div>
