@@ -6,12 +6,13 @@ about the geometric length of the path; this module lets users add
 their own cost without touching C++.
 
 The user writes a scalar CasADi expression in terms of the planner's
-active joint symbol ``q``.  The wrapper takes the gradient via CasADi
-autodiff, generates C, compiles to a ``.so``, and caches the artefact
-so the next run is essentially free.  At plan time the C++ planner
-``dlopen``'s the library and wraps it as a
-``StateCostIntegralObjective`` — OMPL trapezoidally integrates the
-per-state cost along each edge, which is the standard soft-cost
+active joint symbol ``q`` — typically built from
+:class:`autolife_planning.planning.symbolic.SymbolicContext`.  The
+wrapper takes the gradient via CasADi autodiff, generates C, compiles
+to a ``.so``, and caches the artefact so the next run is essentially
+free.  At plan time the C++ planner ``dlopen``'s the library and wraps
+it as a ``StateCostIntegralObjective`` — OMPL trapezoidally integrates
+the per-state cost along each edge, which is the standard soft-cost
 treatment for RRT*-family planners.
 
 The design intentionally mirrors
@@ -27,11 +28,12 @@ import os
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import casadi as ca
+
+from .symbolic import _cwd
 
 
 def _cache_root() -> Path:
@@ -46,17 +48,6 @@ def _cache_root() -> Path:
     xdg = os.environ.get("XDG_CACHE_HOME")
     base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
     return (base / "autolife_planning" / "costs").resolve()
-
-
-@contextmanager
-def _cwd(path: Path):
-    """Temporarily chdir — CasADi's generate() always writes to cwd."""
-    old = Path.cwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(old)
 
 
 @dataclass
