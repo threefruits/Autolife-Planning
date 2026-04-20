@@ -83,18 +83,32 @@ def test_planner_extension_loads():
 def test_symbolic_context_backend_available():
     """Either pinocchio.casadi or urdf2casadi must be importable post-install.
 
-    This is the guardrail: if both are missing, every Constraint / Cost
-    authored on top of ``SymbolicContext`` breaks.  We surface that as
-    a hard fail with a pip install hint rather than letting it silently
+    This is the guardrail: if both backends fail to load, every Constraint
+    / Cost authored on top of ``SymbolicContext`` breaks.  We surface that
+    as a hard fail with a pip install hint rather than letting it silently
     bite the first user who tries the examples.
+
+    When the failure happens, we re-import the candidate backends here so
+    the actual error message reaches the CI log — ``symbolic.py`` swallows
+    the import exceptions to keep the optional-dep contract.
     """
     import autolife_planning.planning.symbolic as sym
 
     if sym.pin is None and sym.URDFparser is None:
+        # symbolic.py's blanket ``except Exception`` hid the real cause;
+        # re-run each import here so the traceback shows up in CI.
+        errors = {}
+        for name in ("pinocchio", "pinocchio.casadi", "urdf2casadi"):
+            try:
+                __import__(name)
+                errors[name] = "(import succeeded — symbolic.py state stale?)"
+            except Exception as exc:  # noqa: BLE001 - we want the full reason
+                errors[name] = f"{type(exc).__name__}: {exc}"
         pytest.fail(
-            "No FK backend installed. Install one of:\n"
-            "  pip install pin           # full pinocchio (preferred)\n"
-            "  pip install urdf2casadi   # lightweight fallback"
+            "No FK backend usable from SymbolicContext. Re-import results:\n"
+            + "\n".join(f"  {name}: {msg}" for name, msg in errors.items())
+            + "\n\nFix: ``pip install pin`` (preferred) or "
+            "``pip install urdf2casadi`` (fallback)."
         )
 
     from autolife_planning.planning import SymbolicContext
