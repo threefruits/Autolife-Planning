@@ -75,6 +75,12 @@ sdist.exclude = [
 
 [project.optional-dependencies]
 dev = ["pre-commit", "pybullet", "pytest>=8.0", "trimesh>=4.0"]
+examples = [
+    "casadi",
+    "fire",
+    "matplotlib",
+    "pybullet",
+]
 
 # ── cibuildwheel ─────────────────────────────────────────────────────
 # manylinux_2_34 (AlmaLinux 9) x86_64 baseline. AVX2 is required

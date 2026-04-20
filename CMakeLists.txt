@@ -3,6 +3,7 @@ project(autolife_planning_ext LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include(CheckCXXCompilerFlag)
 
 # CMP0167 NEW requires BoostConfig.cmake (Boost >= 1.70). manylinux_2_28
 # (AlmaLinux 8) ships Boost 1.66, which only provides the legacy
@@ -35,7 +36,22 @@ find_package(NLopt QUIET)
 #   cmake -DAUTOLIFE_ARCH_FLAGS=-march=native ...
 set(AUTOLIFE_ARCH_FLAGS "-march=x86-64-v3"
     CACHE STRING "Target CPU arch flags for native extensions")
-separate_arguments(AUTOLIFE_ARCH_FLAGS_LIST NATIVE_COMMAND "${AUTOLIFE_ARCH_FLAGS}")
+
+# Older compilers may not recognize newer micro-architecture levels such as
+# x86-64-v3. If that happens, keep the required SIMD feature set by falling
+# back to explicit AVX2/FMA/BMI2 flags.
+set(_autolife_arch_flags "${AUTOLIFE_ARCH_FLAGS}")
+check_cxx_compiler_flag("${_autolife_arch_flags}" AUTOLIFE_ARCH_FLAGS_SUPPORTED)
+if(NOT AUTOLIFE_ARCH_FLAGS_SUPPORTED)
+    message(WARNING "Compiler does not support AUTOLIFE_ARCH_FLAGS='${AUTOLIFE_ARCH_FLAGS}'. Falling back to '-march=x86-64 -mavx2 -mfma -mbmi2'.")
+    set(_autolife_arch_flags "-march=x86-64 -mavx2 -mfma -mbmi2")
+    check_cxx_compiler_flag("${_autolife_arch_flags}" AUTOLIFE_ARCH_FALLBACK_SUPPORTED)
+    if(NOT AUTOLIFE_ARCH_FALLBACK_SUPPORTED)
+        message(FATAL_ERROR "Compiler does not support fallback architecture flags '${_autolife_arch_flags}'. Set -DAUTOLIFE_ARCH_FLAGS to a supported value.")
+    endif()
+endif()
+
+separate_arguments(AUTOLIFE_ARCH_FLAGS_LIST NATIVE_COMMAND "${_autolife_arch_flags}")
 
 # ── VAMP dependencies (header-only, fetched via CPM) ─────────────────
 

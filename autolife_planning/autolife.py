@@ -139,7 +139,7 @@ _WAIST_JOINTS = ["Joint_Waist_Pitch", "Joint_Waist_Yaw"]
 _BASE_JOINTS = ["Joint_Virtual_X", "Joint_Virtual_Y", "Joint_Virtual_Theta"]
 # Sagittal chain that bends the robot up/down — used to plan height changes.
 _HEIGHT_JOINTS = ["Joint_Ankle", "Joint_Knee", "Joint_Waist_Pitch"]
-
+_LEGS_JOINTS = ["Joint_Ankle", "Joint_Knee"]
 PLANNING_SUBGROUPS = {
     # Mobile base in the ground plane (3 DOF: x, y, yaw)
     "autolife_base": {"dof": 3, "joints": _BASE_JOINTS},
@@ -156,6 +156,10 @@ PLANNING_SUBGROUPS = {
         "dof": 9,
         "joints": _WAIST_JOINTS + _RIGHT_ARM_JOINTS,
     },
+    # Torso + arm + waist (16 DOF: 2 waist + 7 arm + 7 waist)
+    "autolife_torso_dual_arm": {"dof": 16, "joints": _WAIST_JOINTS + _LEFT_ARM_JOINTS + _RIGHT_ARM_JOINTS},
+    # legs + torso + arm + waist (23 DOF: 2 legs + 2 waist + 7 arm + 7 waist)
+    "autolife_leg_torso_dual_arm": {"dof": 18, "joints": _LEGS_JOINTS + _WAIST_JOINTS + _LEFT_ARM_JOINTS + _RIGHT_ARM_JOINTS},
     # Whole body without base (21 DOF)
     "autolife_body": {
         "dof": 21,
