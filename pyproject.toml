@@ -121,7 +121,10 @@ archs = ["x86_64"]
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_34"
-before-all = "dnf install -y boost-devel eigen3-devel"
+# ``patch`` is needed by CMakeLists.txt to apply our carried OMPL fix
+# (cmake/patches/ompl-nanobind-guard.patch).  The manylinux_2_34 image
+# does not ship it by default.
+before-all = "dnf install -y boost-devel eigen3-devel patch"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
