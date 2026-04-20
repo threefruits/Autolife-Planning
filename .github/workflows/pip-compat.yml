@@ -44,6 +44,17 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      # OMPL's CMakeModules/OMPLDependencies.cmake add_subdirectory's its own
+      # vendored nanobind (a sub-sub-submodule) whenever the path exists —
+      # regardless of OMPL_BUILD_PYTHON_BINDINGS=OFF set upstream.  That
+      # vendored nanobind 2.x errors out on Python < 3.9, blocking cp38.
+      # Deleting the path makes OMPL's ``if(EXISTS ...)`` guard fall through
+      # and OMPL silently runs with OMPL_HAVE_NANOBIND=0 — which is what we
+      # want (we build our own _ompl_vamp binding; OMPL's py-bindings are
+      # disabled anyway).
+      - name: Strip OMPL's vendored nanobind sub-sub-submodule
+        run: rm -rf third_party/ompl/external/nanobind
+
       - name: Build wheel + run post-install tests in a fresh venv
         uses: pypa/cibuildwheel@v3.4.1
         env:
@@ -55,9 +66,17 @@ jobs:
           # {project} expands to the checked-out source tree inside the
           # manylinux container — lets pytest find tests/ without needing
           # the repo to be importable (the wheel provides the package).
+          #
+          # --ignore test_kinematics.py: the kinematics module (pinocchio FK,
+          # collision model, pink IK, trac-ik) is NOT part of the
+          # pip-compat contract — pin-pink requires Python >=3.10 and
+          # trac-ik / collision-model need conda-forge helpers.  The
+          # planning + trajectory + constraint/cost pipelines ARE covered
+          # and must pass on every supported cpython.
           CIBW_TEST_COMMAND: >
             python -m pytest -v {project}/tests/test_install_smoke.py &&
             python -m pytest {project}/tests
+            --ignore={project}/tests/test_kinematics.py
 
       - uses: actions/upload-artifact@v4
         if: always()

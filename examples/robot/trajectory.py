@@ -13,17 +13,18 @@ Usage::
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import time
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from autolife_planning.autolife import autolife_robot_config
-from robot.autolife_planner import AutolifePlanner
-from robot.visualize import _DEFAULT_GOALS
+from robot.autolife_planner import AutolifePlanner  # noqa: E402
+from robot.visualize import _DEFAULT_GOALS  # noqa: E402
 
+from autolife_planning.autolife import autolife_robot_config  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Visualisation
@@ -58,17 +59,18 @@ def plot_trajectory(
         title:          Figure suptitle.
     """
     n_active = len(active_indices)
-    cols   = min(n_active, 7)
+    cols = min(n_active, 7)
     stride = max(1, n_active // cols)
     plot_idx = active_indices[::stride][:cols]
 
     times_before = np.arange(len(path)) * dt_before
-    dt_out   = float(times_after[1] - times_after[0])
-    vel      = np.gradient(traj_after, dt_out, axis=0)
-    acc      = np.gradient(vel,        dt_out, axis=0)
+    dt_out = float(times_after[1] - times_after[0])
+    vel = np.gradient(traj_after, dt_out, axis=0)
+    acc = np.gradient(vel, dt_out, axis=0)
 
     fig, axes = plt.subplots(
-        3, len(plot_idx),
+        3,
+        len(plot_idx),
         figsize=(2.8 * len(plot_idx), 8),
         sharey="row",
     )
@@ -82,10 +84,22 @@ def plot_trajectory(
 
         # ── position ──────────────────────────────────────────────────
         ax = axes[0, col]
-        ax.plot(times_before, path[:, j], "o", ms=4, color="steelblue",
-                zorder=3, label="waypoints\n(Δt=0.02 s assumed)")
-        ax.plot(times_after, traj_after[:, j], lw=1.5, color="tomato",
-                label=f"parameterized")
+        ax.plot(
+            times_before,
+            path[:, j],
+            "o",
+            ms=4,
+            color="steelblue",
+            zorder=3,
+            label="waypoints\n(Δt=0.02 s assumed)",
+        )
+        ax.plot(
+            times_after,
+            traj_after[:, j],
+            lw=1.5,
+            color="tomato",
+            label="parameterized",
+        )
         ax.set_title(short, fontsize=8)
         if col == 0:
             ax.set_ylabel("pos (rad)", fontsize=8)
@@ -96,9 +110,8 @@ def plot_trajectory(
         # ── velocity ──────────────────────────────────────────────────
         ax = axes[1, col]
         ax.plot(times_after, vel[:, j], lw=1.3, color="darkorange")
-        ax.axhline( v_max, color="gray", ls="--", lw=0.8)
-        ax.axhline(-v_max, color="gray", ls="--", lw=0.8,
-                   label=f"±{v_max} rad/s")
+        ax.axhline(v_max, color="gray", ls="--", lw=0.8)
+        ax.axhline(-v_max, color="gray", ls="--", lw=0.8, label=f"±{v_max} rad/s")
         if col == 0:
             ax.set_ylabel("vel (rad/s)", fontsize=8)
             ax.legend(fontsize=6)
@@ -108,9 +121,8 @@ def plot_trajectory(
         # ── acceleration ───────────────────────────────────────────────
         ax = axes[2, col]
         ax.plot(times_after, acc[:, j], lw=1.3, color="mediumseagreen")
-        ax.axhline( a_max, color="gray", ls="--", lw=0.8)
-        ax.axhline(-a_max, color="gray", ls="--", lw=0.8,
-                   label=f"±{a_max} rad/s²")
+        ax.axhline(a_max, color="gray", ls="--", lw=0.8)
+        ax.axhline(-a_max, color="gray", ls="--", lw=0.8, label=f"±{a_max} rad/s²")
         ax.set_xlabel("time (s)", fontsize=7)
         if col == 0:
             ax.set_ylabel("acc (rad/s²)", fontsize=8)
@@ -137,8 +149,9 @@ def main(
     vel_scale: float = 1.0,
     a_scale: float = 1.0,
 ) -> None:
-    from autolife_planning.autolife import HOME_JOINTS
     from robot.autolife_planner import _active_indices
+
+    from autolife_planning.autolife import HOME_JOINTS
 
     ap = AutolifePlanner(planner_name=planner, time_limit=time_limit)
     start = HOME_JOINTS.copy()
@@ -158,8 +171,9 @@ def main(
 
     print(f"  {len(path)} waypoints  →  time-parameterizing …")
     start_time = time.time()
-    times, traj = ap.time_parameterize(path, v_max=v_max, a_max=a_max, dt=dt,
-                                       vel_scale=vel_scale, a_scale=a_scale)
+    times, traj = ap.time_parameterize(
+        path, v_max=v_max, a_max=a_max, dt=dt, vel_scale=vel_scale, a_scale=a_scale
+    )
     end_time = time.time()
     print(f"Time-parameterizing time: {end_time - start_time} seconds")
     print(f"  {len(traj)} trajectory points  (total {times[-1]:.2f} s)")
@@ -170,12 +184,15 @@ def main(
 
     # For leg_torso_dual_arm show only legs + torso + left arm; skip right arm.
     if group == "autolife_leg_torso_dual_arm":
-        right_arm = set(range(JOINT_GROUPS["right_arm"].start,
-                              JOINT_GROUPS["right_arm"].stop))
+        right_arm = set(
+            range(JOINT_GROUPS["right_arm"].start, JOINT_GROUPS["right_arm"].stop)
+        )
         active = [i for i in active if i not in right_arm]
 
     plot_trajectory(
-        path, times, traj,
+        path,
+        times,
+        traj,
         joint_names=list(autolife_robot_config.joint_names),
         active_indices=active,
         v_max=v_max,
@@ -187,4 +204,5 @@ def main(
 
 if __name__ == "__main__":
     from fire import Fire
+
     Fire(main)
