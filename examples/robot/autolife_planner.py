@@ -179,8 +179,8 @@ class AutolifePlanner:
     @staticmethod
     def time_parameterize(
         path: np.ndarray,
-        v_max: float = 0.5,
-        a_max: float = 0.6,
+        v_max: float | None = None,
+        a_max: float | None = None,
         dt: float = 0.02,
         vel_scale: float = 1.0,
         a_scale: float = 1.0,
@@ -189,16 +189,25 @@ class AutolifePlanner:
 
         Wraps the C++ TOTG (Kunz & Stilman, 2012) parameterizer exposed via
         :class:`autolife_planning.trajectory.TimeOptimalParameterizer` — the
-        same algorithm used by MoveIt 2.  ``v_max``/``a_max`` are broadcast to
-        per-joint limits.
+        same algorithm used by MoveIt 2.
+
+        Per-joint limits are sourced from
+        ``autolife_robot_config.max_velocity`` / ``max_acceleration`` by
+        default.  Passing a scalar ``v_max``/``a_max`` overrides with a
+        uniform value broadcast across every joint.
 
         Args:
             path:      ``(N, DOF)`` waypoints from the motion planner.
-            v_max:     Maximum joint velocity (rad/s), uniform across all joints.
-            a_max:     Maximum joint acceleration (rad/s²), uniform across all joints.
+            v_max:     Scalar override for per-joint velocity limit (rad/s).
+                       ``None`` uses ``autolife_robot_config.max_velocity``.
+            a_max:     Scalar override for per-joint acceleration limit
+                       (rad/s²). ``None`` uses
+                       ``autolife_robot_config.max_acceleration``.
             dt:        Output sample period (seconds).
-            vel_scale: Fractional scale applied to *v_max* (must be in (0, 1]).
-            a_scale:   Fractional scale applied to *a_max* (must be in (0, 1]).
+            vel_scale: Fractional scale applied to the velocity limit
+                       (must be in (0, 1]).
+            a_scale:   Fractional scale applied to the acceleration limit
+                       (must be in (0, 1]).
 
         Returns:
             times: ``(M,)`` timestamps of the output trajectory.
@@ -209,9 +218,42 @@ class AutolifePlanner:
         if N == 1:
             return np.array([0.0]), path.copy()
 
+        if v_max is None:
+            if autolife_robot_config.max_velocity is None:
+                raise ValueError(
+                    "v_max not supplied and autolife_robot_config.max_velocity "
+                    "is None — either pass a scalar v_max or populate the "
+                    "robot config."
+                )
+            max_velocity = np.asarray(
+                autolife_robot_config.max_velocity, dtype=np.float64
+            )
+        else:
+            max_velocity = np.full(DOF, v_max, dtype=np.float64)
+
+        if a_max is None:
+            if autolife_robot_config.max_acceleration is None:
+                raise ValueError(
+                    "a_max not supplied and autolife_robot_config."
+                    "max_acceleration is None — either pass a scalar a_max "
+                    "or populate the robot config."
+                )
+            max_acceleration = np.asarray(
+                autolife_robot_config.max_acceleration, dtype=np.float64
+            )
+        else:
+            max_acceleration = np.full(DOF, a_max, dtype=np.float64)
+
+        if max_velocity.shape != (DOF,) or max_acceleration.shape != (DOF,):
+            raise ValueError(
+                f"limit shape mismatch: path DOF={DOF}, "
+                f"max_velocity={max_velocity.shape}, "
+                f"max_acceleration={max_acceleration.shape}"
+            )
+
         param = TimeOptimalParameterizer(
-            max_velocity=np.full(DOF, v_max, dtype=np.float64),
-            max_acceleration=np.full(DOF, a_max, dtype=np.float64),
+            max_velocity=max_velocity,
+            max_acceleration=max_acceleration,
         )
         traj = param.parameterize(
             path,

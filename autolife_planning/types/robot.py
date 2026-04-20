@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 @dataclass
@@ -18,6 +22,11 @@ class RobotConfig:
     urdf_path: str
     joint_names: list[str]
     camera: CameraConfig
+    # Per-joint kinematic limits used by time-optimal trajectory parameterization.
+    # Shape (len(joint_names),), strictly positive. ``None`` means "not supplied
+    # by this robot" — callers must pass explicit limits instead.
+    max_velocity: Optional["np.ndarray"] = field(default=None)
+    max_acceleration: Optional["np.ndarray"] = field(default=None)
 
 
 @dataclass(frozen=True)

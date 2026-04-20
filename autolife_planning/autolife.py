@@ -72,6 +72,17 @@ CHAIN_CONFIGS: dict[str, ChainConfig] = {
 
 VIZ_URDF_PATH = os.path.join(_RESOURCES_DIR, "autolife_viz.urdf")
 
+# Conservative placeholder limits for time-optimal trajectory generation
+# (MoveIt-style TOTG). Uniform across all 24 joints until real per-joint specs
+# are wired in — the URDFs currently carry a ``velocity="1"`` placeholder on
+# every joint and no acceleration field at all, so these values are the
+# practical source of truth for the example scripts.
+#
+# Override these per-joint when real robot specs are available, e.g. faster
+# wrists and slower legs/ankle/knee.
+MAX_VELOCITY = np.full(24, 0.5, dtype=np.float64)  # rad/s
+MAX_ACCELERATION = np.full(24, 0.6, dtype=np.float64)  # rad/s^2
+
 autolife_robot_config = RobotConfig(
     urdf_path=os.path.join(_RESOURCES_DIR, "autolife.urdf"),
     joint_names=[
@@ -114,6 +125,8 @@ autolife_robot_config = RobotConfig(
         near=0.1,
         far=10.0,
     ),
+    max_velocity=MAX_VELOCITY,
+    max_acceleration=MAX_ACCELERATION,
 )
 
 # VAMP subgroup robot names for planning.
