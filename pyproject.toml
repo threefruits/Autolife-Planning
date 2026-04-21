@@ -16,14 +16,23 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy",
     "scipy",
-    # Pinocchio on PyPI (Stack-Of-Tasks).  Backs the preferred FK backend
-    # of SymbolicContext and is used by every module under
-    # autolife_planning.kinematics.  Wheels published for cp38+.
-    "pin",
-    # Caron's Pink IK library.  Only needed by the optional Pink IK solver
-    # in autolife_planning.kinematics.pink_ik_solver; requires Python >=3.10
-    # at the PyPI level, so we gate it behind a version marker instead of
-    # making cp38/cp39 users pick between a failed install and no planner.
+    # Pure-Python symbolic-FK backend used by SymbolicContext.  Always
+    # installed so pip-only users have a working fallback when
+    # ``pinocchio.casadi`` (the preferred backend) is not present —
+    # ``pinocchio.casadi`` is not available on PyPI for any Python
+    # version, so pip-only installs always end up here.  Conda/pixi
+    # users have ``pinocchio.casadi`` and SymbolicContext picks it
+    # automatically (see autolife_planning/planning/symbolic.py).
+    # Pinned ``<1.2`` because urdf2casadi 1.2.0 hard-pins
+    # ``casadi==3.5.5`` and ``numpy<2.0.0``; 1.0.x is unpinned.
+    "urdf2casadi>=1.0,<1.2",
+    # Numeric pinocchio (Stack-Of-Tasks).  Used by every module under
+    # autolife_planning.kinematics.  cp38 is excluded because pin's
+    # source-build dep ``cmeel-boost~=1.89`` has no cp38 wheel.
+    "pin; python_version >= '3.9'",
+    # Caron's Pink IK library.  Only needed by the optional Pink IK
+    # solver in autolife_planning.kinematics.pink_ik_solver; PyPI
+    # requires Python >=3.10.
     "pin-pink; python_version >= '3.10'",
 ]
 
@@ -94,11 +103,6 @@ examples = [
     "matplotlib",
     "pybullet",
 ]
-# Pure-Python symbolic FK fallback used by SymbolicContext when
-# pinocchio.casadi is not available (e.g. Python versions without a
-# pinocchio PyPI wheel). Pinocchio is still preferred — this extra
-# exists so ``pip install '.[urdf2casadi]'`` is one predictable command.
-urdf2casadi = ["urdf2casadi"]
 
 # ── cibuildwheel ─────────────────────────────────────────────────────
 # manylinux_2_34 (AlmaLinux 9) x86_64 baseline. AVX2 is required
