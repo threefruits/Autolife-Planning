@@ -9,6 +9,8 @@ The dataclass *types* themselves live in :mod:`autolife_planning.types.robot`
 — this file holds *values* of those types.
 """
 
+from __future__ import annotations
+
 import os
 
 import numpy as np
@@ -70,6 +72,17 @@ CHAIN_CONFIGS: dict[str, ChainConfig] = {
 
 VIZ_URDF_PATH = os.path.join(_RESOURCES_DIR, "autolife_viz.urdf")
 
+# Conservative placeholder limits for time-optimal trajectory generation
+# (MoveIt-style TOTG). Uniform across all 24 joints until real per-joint specs
+# are wired in — the URDFs currently carry a ``velocity="1"`` placeholder on
+# every joint and no acceleration field at all, so these values are the
+# practical source of truth for the example scripts.
+#
+# Override these per-joint when real robot specs are available, e.g. faster
+# wrists and slower legs/ankle/knee.
+MAX_VELOCITY = np.full(24, 0.5, dtype=np.float64)  # rad/s
+MAX_ACCELERATION = np.full(24, 0.6, dtype=np.float64)  # rad/s^2
+
 autolife_robot_config = RobotConfig(
     urdf_path=os.path.join(_RESOURCES_DIR, "autolife.urdf"),
     joint_names=[
@@ -112,6 +125,8 @@ autolife_robot_config = RobotConfig(
         near=0.1,
         far=10.0,
     ),
+    max_velocity=MAX_VELOCITY,
+    max_acceleration=MAX_ACCELERATION,
 )
 
 # VAMP subgroup robot names for planning.
@@ -139,7 +154,7 @@ _WAIST_JOINTS = ["Joint_Waist_Pitch", "Joint_Waist_Yaw"]
 _BASE_JOINTS = ["Joint_Virtual_X", "Joint_Virtual_Y", "Joint_Virtual_Theta"]
 # Sagittal chain that bends the robot up/down — used to plan height changes.
 _HEIGHT_JOINTS = ["Joint_Ankle", "Joint_Knee", "Joint_Waist_Pitch"]
-
+_LEGS_JOINTS = ["Joint_Ankle", "Joint_Knee"]
 PLANNING_SUBGROUPS = {
     # Mobile base in the ground plane (3 DOF: x, y, yaw)
     "autolife_base": {"dof": 3, "joints": _BASE_JOINTS},
@@ -155,6 +170,16 @@ PLANNING_SUBGROUPS = {
     "autolife_torso_right_arm": {
         "dof": 9,
         "joints": _WAIST_JOINTS + _RIGHT_ARM_JOINTS,
+    },
+    # Torso + dual arm (16 DOF: 2 waist + 7 left arm + 7 right arm)
+    "autolife_torso_dual_arm": {
+        "dof": 16,
+        "joints": _WAIST_JOINTS + _LEFT_ARM_JOINTS + _RIGHT_ARM_JOINTS,
+    },
+    # Legs + torso + dual arm (18 DOF: 2 legs + 2 waist + 7 left arm + 7 right arm)
+    "autolife_leg_torso_dual_arm": {
+        "dof": 18,
+        "joints": _LEGS_JOINTS + _WAIST_JOINTS + _LEFT_ARM_JOINTS + _RIGHT_ARM_JOINTS,
     },
     # Whole body without base (21 DOF)
     "autolife_body": {

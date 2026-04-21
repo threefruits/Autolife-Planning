@@ -3,6 +3,7 @@ project(autolife_planning_ext LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include(CheckCXXCompilerFlag)
 
 # CMP0167 NEW requires BoostConfig.cmake (Boost >= 1.70). manylinux_2_28
 # (AlmaLinux 8) ships Boost 1.66, which only provides the legacy
@@ -35,7 +36,22 @@ find_package(NLopt QUIET)
 #   cmake -DAUTOLIFE_ARCH_FLAGS=-march=native ...
 set(AUTOLIFE_ARCH_FLAGS "-march=x86-64-v3"
     CACHE STRING "Target CPU arch flags for native extensions")
-separate_arguments(AUTOLIFE_ARCH_FLAGS_LIST NATIVE_COMMAND "${AUTOLIFE_ARCH_FLAGS}")
+
+# Older compilers may not recognize newer micro-architecture levels such as
+# x86-64-v3. If that happens, keep the required SIMD feature set by falling
+# back to explicit AVX2/FMA/BMI2 flags.
+set(_autolife_arch_flags "${AUTOLIFE_ARCH_FLAGS}")
+check_cxx_compiler_flag("${_autolife_arch_flags}" AUTOLIFE_ARCH_FLAGS_SUPPORTED)
+if(NOT AUTOLIFE_ARCH_FLAGS_SUPPORTED)
+    message(WARNING "Compiler does not support AUTOLIFE_ARCH_FLAGS='${AUTOLIFE_ARCH_FLAGS}'. Falling back to '-march=x86-64 -mavx2 -mfma -mbmi2'.")
+    set(_autolife_arch_flags "-march=x86-64 -mavx2 -mfma -mbmi2")
+    check_cxx_compiler_flag("${_autolife_arch_flags}" AUTOLIFE_ARCH_FALLBACK_SUPPORTED)
+    if(NOT AUTOLIFE_ARCH_FALLBACK_SUPPORTED)
+        message(FATAL_ERROR "Compiler does not support fallback architecture flags '${_autolife_arch_flags}'. Set -DAUTOLIFE_ARCH_FLAGS to a supported value.")
+    endif()
+endif()
+
+separate_arguments(AUTOLIFE_ARCH_FLAGS_LIST NATIVE_COMMAND "${_autolife_arch_flags}")
 
 # ── VAMP dependencies (header-only, fetched via CPM) ─────────────────
 
@@ -57,6 +73,43 @@ set(OMPL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(OMPL_BUILD_VAMP OFF CACHE BOOL "" FORCE)
 set(OMPL_REGISTRATION OFF CACHE BOOL "" FORCE)
 set(OMPL_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+
+# Apply our carried patches against vendored OMPL before its CMake runs.
+# Each patch is idempotent: we read the target file and skip when the patch
+# is already present, so re-running cmake or running ``git submodule
+# update`` (which resets the OMPL tree) both work.
+set(_OMPL_PATCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches")
+set(_OMPL_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ompl")
+
+# ompl-nanobind-guard.patch: OMPL's OMPLDependencies.cmake unconditionally
+# add_subdirectory()s its vendored external/nanobind whenever the path
+# exists, ignoring OMPL_BUILD_PYTHON_BINDINGS.  That nanobind 2.x then
+# rejects Python < 3.9, breaking cp38 wheel builds.  The patch adds the
+# missing OMPL_BUILD_PYTHON_BINDINGS gate.  Delete the patch (and this
+# block) once OMPL accepts the fix upstream.
+set(_patch "${_OMPL_PATCH_DIR}/ompl-nanobind-guard.patch")
+set(_target "${_OMPL_SUBMODULE_DIR}/CMakeModules/OMPLDependencies.cmake")
+if(EXISTS "${_target}")
+    file(READ "${_target}" _ompl_deps_content)
+    if(NOT _ompl_deps_content MATCHES "OMPL_BUILD_PYTHON_BINDINGS AND OMPL_HAVE_PYTHON")
+        find_program(PATCH_EXECUTABLE patch REQUIRED)
+        execute_process(
+            COMMAND "${PATCH_EXECUTABLE}" -p1 -i "${_patch}"
+            WORKING_DIRECTORY "${_OMPL_SUBMODULE_DIR}"
+            RESULT_VARIABLE _patch_rc
+            OUTPUT_VARIABLE _patch_stdout
+            ERROR_VARIABLE _patch_stderr
+        )
+        if(NOT _patch_rc EQUAL 0)
+            message(FATAL_ERROR
+                "Failed to apply ${_patch} (rc=${_patch_rc}):\n"
+                "stdout: ${_patch_stdout}\n"
+                "stderr: ${_patch_stderr}")
+        endif()
+        message(STATUS "Applied carried patch: ompl-nanobind-guard.patch")
+    endif()
+endif()
+
 add_subdirectory(third_party/ompl EXCLUDE_FROM_ALL)
 
 # ── OMPL + VAMP extension ────────────────────────────────────────────

@@ -54,6 +54,8 @@ scikit-build-core = ">=0.4.3"
 nanobind = ">=2.0.0"
 twine = ">=6.2.0,<7"
 pybullet = ">=3.25,<4"
+casadi = ">=3.7.2,<4"
+matplotlib = ">=3.10.0,<4"
 pre-commit = ">=4.5.1,<5"
 
 [feature.dev.pypi-dependencies]
