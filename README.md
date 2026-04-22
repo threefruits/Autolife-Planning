@@ -4,13 +4,13 @@
 
 [![PyPI](https://img.shields.io/pypi/v/autolife-planning?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/autolife-planning/)
 [![Python](https://img.shields.io/pypi/pyversions/autolife-planning?style=for-the-badge&logo=python&logoColor=white)](https://pypi.org/project/autolife-planning/)
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=for-the-badge&logo=materialformkdocs)](https://h-tr.github.io/Autolife-Planning/)
-[![Build Docs](https://img.shields.io/github/actions/workflow/status/H-tr/Autolife-Planning/docs.yml?branch=main&style=for-the-badge&label=docs%20build&logo=github)](https://github.com/H-tr/Autolife-Planning/actions/workflows/docs.yml)
-[![CI](https://img.shields.io/github/actions/workflow/status/H-tr/Autolife-Planning/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github)](https://github.com/H-tr/Autolife-Planning/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=for-the-badge&logo=materialformkdocs)](https://adacompnus.github.io/Autolife-Planning/)
+[![Build Docs](https://img.shields.io/github/actions/workflow/status/AdaCompNUS/Autolife-Planning/docs.yml?branch=main&style=for-the-badge&label=docs%20build&logo=github)](https://github.com/AdaCompNUS/Autolife-Planning/actions/workflows/docs.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/AdaCompNUS/Autolife-Planning/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github)](https://github.com/AdaCompNUS/Autolife-Planning/actions/workflows/ci.yml)
 
-**[Documentation](https://h-tr.github.io/Autolife-Planning/)** | **[API Reference](https://h-tr.github.io/Autolife-Planning/api/kinematics/)**
+**[Documentation](https://adacompnus.github.io/Autolife-Planning/)** | **[API Reference](https://adacompnus.github.io/Autolife-Planning/api/kinematics/)**
 
-<a href="https://github.com/H-tr/Autolife-Planning/raw/main/docs/assets/rls_pick_place.mp4"><img src="docs/assets/rls_pick_place.gif" alt="rls_pick_place demo" width="100%"></a>
+<a href="https://github.com/AdaCompNUS/Autolife-Planning/raw/main/docs/assets/rls_pick_place.mp4"><img src="docs/assets/rls_pick_place.gif" alt="rls_pick_place demo" width="100%"></a>
 
 <sub>↑ 5× sped-up preview — click for full-quality MP4</sub>
 
@@ -32,7 +32,7 @@ A planning library for the Autolife robot. It provides inverse kinematics (TRAC-
 For inference — running the planners and IK solvers — just pip install:
 
 ```bash
-git clone --recursive https://github.com/H-tr/Autolife-Planning.git
+git clone --recursive https://github.com/AdaCompNUS/Autolife-Planning.git
 cd Autolife-Planning
 pip install -e .
 ```
@@ -43,7 +43,7 @@ For development — rebuilding URDFs, regenerating FK headers, running the C++ t
 bash scripts/setup.sh
 ```
 
-See the [Getting Started](https://h-tr.github.io/Autolife-Planning/getting-started/) guide for detailed installation options.
+See the [Getting Started](https://adacompnus.github.io/Autolife-Planning/getting-started/) guide for detailed installation options.
 
 ## Usage
 

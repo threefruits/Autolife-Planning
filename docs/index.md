@@ -117,7 +117,7 @@ best-case speedup on all-valid workloads.
 For inference — running the planners and IK solvers — just pip install:
 
 ```bash
-git clone --recursive https://github.com/H-tr/Autolife-Planning.git
+git clone --recursive https://github.com/AdaCompNUS/Autolife-Planning.git
 cd Autolife-Planning
 pip install -e .
 ```
