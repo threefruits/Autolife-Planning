@@ -45,7 +45,7 @@ Requirements: Docker must be installed and running.
 For contributing or rebuilding C++ dependencies from source, use [pixi](https://pixi.sh):
 
 ```bash
-git clone --recursive https://github.com/H-tr/Autolife-Planning.git
+git clone --recursive https://github.com/AdaCompNUS/Autolife-Planning.git
 cd Autolife-Planning
 bash scripts/setup.sh
 ```
@@ -53,7 +53,7 @@ bash scripts/setup.sh
 Or manually:
 
 ```bash
-git clone --recursive https://github.com/H-tr/Autolife-Planning.git
+git clone --recursive https://github.com/AdaCompNUS/Autolife-Planning.git
 cd Autolife-Planning
 pixi install
 pixi run cricket-build

@@ -1,8 +1,8 @@
 site_name: Autolife Planning
-site_url: https://h-tr.github.io/Autolife-Planning/
+site_url: https://adacompnus.github.io/Autolife-Planning/
 site_description: Planning library for the Autolife robot — motion planning, trajectory generation, inverse kinematics, and collision-aware planning.
-repo_url: https://github.com/H-tr/Autolife-Planning
-repo_name: H-tr/Autolife-Planning
+repo_url: https://github.com/AdaCompNUS/Autolife-Planning
+repo_name: AdaCompNUS/Autolife-Planning
 
 theme:
   name: material

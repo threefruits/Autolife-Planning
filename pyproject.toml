@@ -42,9 +42,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/H-tr/Autolife-Planning"
-Repository = "https://github.com/H-tr/Autolife-Planning"
-Issues = "https://github.com/H-tr/Autolife-Planning/issues"
+Homepage = "https://github.com/AdaCompNUS/Autolife-Planning"
+Repository = "https://github.com/AdaCompNUS/Autolife-Planning"
+Issues = "https://github.com/AdaCompNUS/Autolife-Planning/issues"
 
 [tool.scikit-build]
 minimum-version = "0.10"

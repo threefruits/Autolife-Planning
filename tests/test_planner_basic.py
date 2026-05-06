@@ -170,3 +170,67 @@ def test_validate_batch_full_body_roundtrip(home_joints):
     got = planner.validate_batch(batch)
     expected = [planner.validate(c) for c in batch]
     assert got == expected
+
+
+def test_leg_torso_dual_arm_configs_collision_free(home_joints):
+    """Pins down three configs for ``autolife_leg_torso_dual_arm`` that
+    must validate as collision-free with the default HOME_JOINTS base.
+
+    Added after a stale-build episode where a pre-rebuilt extension
+    reported one of these as in-collision; this test guards the
+    reproducibility of the fix (and guards against future sphere-geometry
+    regressions on this subgroup).
+    """
+    from autolife_planning.planning import create_planner
+
+    start = np.array(
+        [
+            -0.137867,
+            -0.49979,
+            -0.499886,
+            0.397685,
+            0.000191745,
+            -0.000191745,
+            0.000191745,
+            0.0162983,
+            0.000190738,
+            -0.000190738,
+            0.000572213,
+            2.20142,
+            1.90038,
+            2.87982,
+            -1.96864,
+            2.81395,
+            -0.359541,
+            -0.0551232,
+        ]
+    )
+    goal = np.array(
+        [
+            -0.137867,
+            -0.499886,
+            -0.499886,
+            0.397685,
+            0.349167,
+            -0.000191745,
+            0.000191745,
+            1.91994,
+            0.000190738,
+            -0.000572213,
+            -0.000190738,
+            2.20142,
+            1.90038,
+            2.87982,
+            -1.96864,
+            2.81395,
+            -0.359541,
+            -0.0551232,
+        ]
+    )
+    zero = np.zeros(18)
+
+    planner = create_planner("autolife_leg_torso_dual_arm", base_config=home_joints)
+    assert planner._ndof == 18
+    assert planner.validate(start), "reported start config should be collision-free"
+    assert planner.validate(goal), "reported goal config should be collision-free"
+    assert planner.validate(zero), "all-zero 18-DOF config should be collision-free"
