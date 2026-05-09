@@ -325,9 +325,8 @@ class PinkIKSolver(IKSolverBase):
                 # If fallback succeeded, ``velocity`` exists in local scope.
                 if velocity is not None:
                     pass
-                elif (
-                    getattr(pink, "PinkError", None) is None
-                    or isinstance(exc, getattr(pink, "PinkError"))
+                elif getattr(pink, "PinkError", None) is None or isinstance(
+                    exc, getattr(pink, "PinkError")
                 ):
                     # QP infeasible at this step (e.g. conflicting barriers) —
                     # return best-effort result so far.

@@ -70,7 +70,9 @@ def _matrix_to_pose(T: np.ndarray) -> SE3Pose:
     return SE3Pose(position=T[:3, 3], rotation=T[:3, :3])
 
 
-def topdown_rotation(approach: np.ndarray, world_x_hint: np.ndarray | None = None) -> np.ndarray:
+def topdown_rotation(
+    approach: np.ndarray, world_x_hint: np.ndarray | None = None
+) -> np.ndarray:
     """Build a gripper frame whose +Y axis points opposite to *approach*.
 
     Matches the convention used in demos/rls_pick_place.py:
@@ -116,9 +118,9 @@ def fixed_ee_to_tcp(home_full: np.ndarray) -> np.ndarray:
     T_world_gripper = np.asarray(
         ctx.evaluate_link_pose(GRIPPER_LINK, q_active), dtype=np.float64
     )
-    p_left = np.asarray(ctx.evaluate_link_pose(LEFT_FINGER_LINK, q_active), dtype=np.float64)[
-        :3, 3
-    ]
+    p_left = np.asarray(
+        ctx.evaluate_link_pose(LEFT_FINGER_LINK, q_active), dtype=np.float64
+    )[:3, 3]
     p_right = np.asarray(
         ctx.evaluate_link_pose(RIGHT_FINGER_LINK, q_active), dtype=np.float64
     )[:3, 3]
@@ -148,7 +150,9 @@ def plan_segment_or_raise(
     time_limit: float,
 ) -> np.ndarray:
     t0 = time.perf_counter()
-    result = planner.plan_to_joints(WHOLE_BODY_GROUP, start, goal, time_limit=time_limit)
+    result = planner.plan_to_joints(
+        WHOLE_BODY_GROUP, start, goal, time_limit=time_limit
+    )
     dt_ms = (time.perf_counter() - t0) * 1e3
 
     if isinstance(result, str):
@@ -160,7 +164,9 @@ def plan_segment_or_raise(
     return result
 
 
-def solve_pose_or_raise(solver, target: SE3Pose, seed: np.ndarray, label: str) -> np.ndarray:
+def solve_pose_or_raise(
+    solver, target: SE3Pose, seed: np.ndarray, label: str
+) -> np.ndarray:
     result = solver.solve_constrained(target, seed=seed)
     print(
         f"  IK {label:<10} {result.status.value:<14} "
@@ -194,8 +200,8 @@ def main(
 
     print("\\n1) Solving constrained IK (whole_body_left, pink backend) ...")
     ik_cfg = PinkIKConfig(
-      dt=0.05,
-         convergence_thresh=4e-3,
+        dt=0.05,
+        convergence_thresh=4e-3,
         lm_damping=1e-3,
         com_cost=0.12,
         orientation_cost=0.15,
@@ -206,7 +212,6 @@ def main(
     solver = create_ik_solver("whole_body", side="left", backend="pink", config=ik_cfg)
 
     home_chain = home[WHOLE_BODY_LEFT_IDX]
-    home_pose = solver.fk(home_chain)
     T_ee_tcp = fixed_ee_to_tcp(home)
     T_tcp_ee = np.linalg.inv(T_ee_tcp)
 
@@ -214,9 +219,6 @@ def main(
     grasp_rot = topdown_rotation(approach)
 
     # Define desired TCP targets in world, then map to EE-link targets for IK.
-    home_tcp = _matrix_to_pose(
-        _pose_to_matrix(home_pose.position, home_pose.rotation) @ T_ee_tcp
-    )
     grasp_pos = [0.5, 0.3, 0.8]
     pregrasp_pos = grasp_pos - pregrasp_offset * _unit(approach)
 
